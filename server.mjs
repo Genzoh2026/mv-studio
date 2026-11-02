@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { ConflictError, listDrafts, saveHuman } from "./drafts.mjs";
 import { SessionLimitError, createSessions } from "./sessions.mjs";
+import { codeFingerprint } from "./version.mjs";
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.PORT ?? 4200);
@@ -18,6 +19,8 @@ const PJS = join(WORKSPACE, "PJs");
 const TRASH = join(WORKSPACE, "_Trash");
 const MAX_TRASH_BATCH = 30;
 const HERE = fileURLToPath(new URL(".", import.meta.url));
+// Lets the launcher tell whether this process is older than the files on disk.
+const CODE_VERSION = await codeFingerprint(HERE);
 const MAX_DEPTH = 3;
 const MAX_BODY = 4096;
 const MAX_DRAFT_BODY = 100_000;
@@ -340,6 +343,7 @@ const server = createServer(async (req, res) => {
         workspace: WORKSPACE,
         startedAt: STARTED_AT,
         supervised: SUPERVISED,
+        codeVersion: CODE_VERSION,
         node: process.version,
         sessions: sessions.running(),
       });

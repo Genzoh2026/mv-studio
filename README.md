@@ -16,10 +16,10 @@ monthly download credit.
 ```
 git clone <this repo>
 cd <this repo>
-start.cmd                       # Windows: installs dependencies on first run, opens the browser
+start.cmd [workspace] [port]    # Windows: installs dependencies on first run, opens the browser
 # or, anywhere:
 npm install
-node server.mjs <workspace>     # default port 4200 (PORT=... to change)
+npm start -- [workspace] [port] # same launcher; default port 4200, workspace ../workspace
 ```
 
 1. **PJ一覧**で「+ 新規」から MV の名前を入力 → PJ ができ、左で Claude が起動します。
@@ -63,7 +63,11 @@ node server.mjs <workspace>     # default port 4200 (PORT=... to change)
 - **セッション保持**: PJ ごとの Claude はタブを閉じても、PJ を切り替えても動き続けます(同時に 5 つまで)。PJ一覧の「終了」で止めます。サーバーを止めると、すべて終了します。
 - **削除**: PJ一覧でチェックして「ゴミ箱へ移動」。`_Trash` へ移るだけで、完全には消えません。実行中の PJ は移せません。
 - **画面**: 左のターミナルと右の境界はドラッグで動かせます(ダブルクリックで元に戻る)。
-- **ツールバーと設定**: 左端の細いバーに、ツールのアイコンが並びます(いまは ⚙ 設定だけ)。バーは「‹」で畳めます(左端の取っ手で開き直し)。設定では、サーバーの状態を見て、**再起動**と**停止**ができます。どちらも、動いている Claude をすべて終了させるので、確認が出ます。再起動は `start.cmd` から起動したときだけ使えます(終了コード 75 で終了し、`start.cmd` が同じウィンドウで起動し直します)。`start.cmd` は、ポートが使用中なら、理由を表示して止まります。
+- **ツールバーと設定**: 左端の細いバーに、ツールのアイコンが並びます(いまは ⚙ 設定だけ)。バーは「‹」で畳めます(左端の取っ手で開き直し)。設定では、サーバーの状態を見て、**再起動**と**停止**ができます。どちらも、動いている Claude をすべて終了させるので、確認が出ます。再起動は `start.cmd` から起動したときだけ使えます(終了コード 75 で終了し、`start.cmd` が同じウィンドウで起動し直します)。起動は `launcher.mjs` が担当します。
+  - ポートが空いていれば、サーバーを起動して画面を開きます。
+  - すでに**最新の** MV Studio が動いていれば、**画面だけ**開きます。
+  - **古い**コードの MV Studio が動いていれば、「再起動して最新にする / そのまま開く / 終了」を選べます(再起動すると、そこで動いている Claude が終了します)。最新かどうかは、アプリのファイルの指紋(ハッシュ)で判定します。
+  - 別のワークスペースの MV Studio や、別のプログラムがポートを使っているときは、理由を表示して止まります。
 
 ## セキュリティ / Security
 
