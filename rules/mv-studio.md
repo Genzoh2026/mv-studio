@@ -40,7 +40,7 @@ Each draft has two files in `Drafts/`, each with exactly ONE owner:
 The draft tab types one of three requests, each starting with a tag. Follow the matching procedure.
 
 1. `【確認】` — review a draft.
-   Read `Drafts/<name>.human.json`. Complete the lyrics: keep the user's ideas and wording where they work, give it a
+   Read `Drafts/<name>.human.json`. If the lyrics are EMPTY (the user gave only a title, style or settings), write an original first draft (a "素案") from them for the user to react to, and say so in the `note`. Otherwise complete the lyrics: keep the user's ideas and wording where they work, give it a
    song structure (`[Verse 1]`, `[Chorus]`, `[Bridge]`, `[Outro]`), make it singable and sized for the target
    `duration`. Improve the style tags and fill sensible settings. Write `Drafts/<name>.claude.json` with a `note`.
    Then STOP and wait for the user. Do NOT call any Suno create tool.
