@@ -57,6 +57,13 @@ export function createSessions({ command, args, env }) {
   return {
     attach,
     running: () => [...sessions.keys()],
+    /** Type text into a running session's input line WITHOUT submitting it; the user presses Enter. */
+    type(name, text) {
+      const session = sessions.get(name);
+      if (!session) return false;
+      session.term.write(text);
+      return true;
+    },
     end(name) {
       const session = sessions.get(name);
       if (!session) return false;

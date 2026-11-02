@@ -7,6 +7,7 @@ import { createReadStream, readFileSync } from "node:fs";
 import { basename, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
+import { ConflictError, listDrafts, saveHuman } from "./drafts.mjs";
 import { SessionLimitError, createSessions } from "./sessions.mjs";
 
 const HOST = "127.0.0.1";
@@ -19,6 +20,9 @@ const MAX_TRASH_BATCH = 30;
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const MAX_DEPTH = 3;
 const MAX_BODY = 4096;
+const MAX_DRAFT_BODY = 100_000;
+const MAX_TYPED = 600;
+const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
 const AUDIO = new Set([".mp3", ".wav", ".m4a", ".ogg"]);
 const LYRICS_EXTS = [".lrc", ".txt", ".md"];
 const SUNO_META_EXT = ".suno.json";
@@ -31,39 +35,28 @@ const PJ_NAME = /^[\p{L}\p{N}_-]{1,64}$/u;
 const STATIC = {
   "/": ["public/index.html", "text/html; charset=utf-8"],
   "/app.js": ["public/app.js", "text/javascript"],
+  "/drafts.js": ["public/drafts.js", "text/javascript"],
+  "/toast.js": ["public/toast.js", "text/javascript"],
   "/app.css": ["public/app.css", "text/css"],
   "/vendor/xterm.js": ["node_modules/@xterm/xterm/lib/xterm.js", "text/javascript"],
   "/vendor/xterm.css": ["node_modules/@xterm/xterm/css/xterm.css", "text/css"],
   "/vendor/fit.js": ["node_modules/@xterm/addon-fit/lib/addon-fit.js", "text/javascript"],
 };
 
-// Written into each new project so Claude knows where assets go.
-const PROJECT_RULES = `# MV project
+// The app's rules reach Claude through --append-system-prompt-file on every launch, so a project's own
+// CLAUDE.md is the user's space for notes. (Older projects still carry a copy of earlier rules there.)
+const PROJECT_NOTES = `# MV project
 
-- Save every generated asset under \`Output/\`, grouped by kind.
-- Suno downloads are limited per month, so do NOT download right after creating a song.
-  Instead, once the song is playable, save \`Output/song/<name>.suno.json\` with:
-  \`{"id": "<clip id>", "title": "...", "duration": <seconds>, "style": "...", "lyrics": "...", "cover": "<cover_image_url>",
-  "type": "<metadata.type>", "created_at": "<created_at>", "settings": {...}}\`.
-  (\`cover\` is the song's cover_image_url from Suno; the library uses it as the project's thumbnail.)
-  \`settings\` records what YOU passed to the create call (model, mode, instrumental, vocal_gender, weirdness,
-  style_influence, negative_style, target duration, ...), as flat key: value pairs. Suno cannot return these later,
-  so write them down at creation time; the app shows them as "what was requested".
-  The app shows an embedded Suno player from it, so the user can listen before deciding.
-- One generation can return several clips (\`clip_ids\`; Suno decides how many). Save ALL of them,
-  one file per clip, named \`<title>-1.suno.json\`, \`<title>-2.suno.json\`, ... (a single clip needs no suffix).
-  Previewing costs no download credit, so do not drop any clip yourself; the user picks.
-- Download only the songs the user picks (ask first; it may spend a download credit): save the mp3 as
-  \`Output/song/<name>.mp3\` (same name as its .suno.json). The app then switches to the local player.
-- The app next to this terminal shows what is in \`Output/\`; do not put assets anywhere else.
+Notes for Claude about this MV go here. MV Studio's own rules are supplied by the app at launch.
 `;
 
 // ConPTY cannot launch bare names or .cmd shims ("File not found"), so claude is started through a shell.
 const SHELL = process.platform === "win32" ? "powershell.exe" : process.env.SHELL || "bash";
 // Suno is passed per launch (nothing is written to the user's Claude settings); sign-in is done once via /mcp.
 const MCP_CONFIG = join(HERE, "suno.mcp.json");
+const RULES_FILE = join(HERE, "rules", "mv-studio.md");
 const quote = (s) => `'${s.replaceAll("'", process.platform === "win32" ? "''" : "'\\''")}'`;
-const CLAUDE_COMMAND = `claude --mcp-config ${quote(MCP_CONFIG)}`;
+const CLAUDE_COMMAND = `claude --mcp-config ${quote(MCP_CONFIG)} --append-system-prompt-file ${quote(RULES_FILE)}`;
 const SHELL_ARGS = process.platform === "win32" ? ["-NoLogo", "-NoExit", "-Command", CLAUDE_COMMAND] : ["-lc", `${CLAUDE_COMMAND}; exec "$SHELL"`];
 
 // Drop the parent session's markers, or a Claude started from inside Claude runs as a child session.
@@ -115,7 +108,7 @@ async function createPj(title) {
   const dir = join(PJS, name);
   await mkdir(join(dir, "Output", "song"), { recursive: true });
   // wx: never overwrite rules the user may have edited in an existing project.
-  await writeFile(join(dir, "CLAUDE.md"), PROJECT_RULES, { flag: "wx" }).catch((err) => {
+  await writeFile(join(dir, "CLAUDE.md"), PROJECT_NOTES, { flag: "wx" }).catch((err) => {
     if (err.code !== "EEXIST") throw err;
   });
   return name;
@@ -269,13 +262,19 @@ async function serveAudio(req, res, url) {
   }
 }
 
-async function readBody(req) {
+async function readBody(req, limit = MAX_BODY) {
   let body = "";
   for await (const chunk of req) {
     body += chunk;
-    if (body.length > MAX_BODY) throw new Error("body too large");
+    if (body.length > limit) throw new Error("body too large");
   }
   return JSON.parse(body || "{}");
+}
+
+/** The project's folder if the name is valid and the folder exists, else null. */
+async function existingPjDir(name) {
+  const dir = pjDir(name);
+  return dir && (await stat(dir).then((s) => s.isDirectory(), () => false)) ? dir : null;
 }
 
 const sameOrigin = (req) => req.headers.origin === `http://${HOST}:${PORT}`;
@@ -310,6 +309,27 @@ const server = createServer(async (req, res) => {
       if (!pjDir(name)) return json(res, 400, { error: "bad project" });
       return json(res, 200, { ended: sessions.end(name) });
     }
+    if (url.pathname === "/api/drafts" && req.method === "GET") {
+      const dir = await existingPjDir(url.searchParams.get("pj"));
+      return dir ? json(res, 200, await listDrafts(dir)) : json(res, 400, { error: "bad project" });
+    }
+    if (url.pathname === "/api/drafts/save" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      const body = await readBody(req, MAX_DRAFT_BODY);
+      const dir = await existingPjDir(body.pj);
+      if (!dir) return json(res, 400, { error: "bad project" });
+      return json(res, 200, { mtime: await saveHuman(dir, body.name, body.data, body.baseMtime) });
+    }
+    if (url.pathname === "/api/sessions/type" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      const { pj, text } = await readBody(req);
+      if (!pjDir(pj)) return json(res, 400, { error: "bad project" });
+      // One plain line only: no newline (it would submit) and no escape sequences.
+      if (typeof text !== "string" || !text || text.length > MAX_TYPED || CONTROL_CHARS.test(text)) {
+        return json(res, 400, { error: `text: 1-${MAX_TYPED} characters, no control characters` });
+      }
+      return sessions.type(pj, text) ? json(res, 200, { typed: true }) : json(res, 409, { error: "no running session for this project" });
+    }
     if (url.pathname === "/api/songs") {
       if (!pjDir(url.searchParams.get("pj"))) return json(res, 400, { error: "bad project" });
       return json(res, 200, await listSongs(url.searchParams.get("pj")));
@@ -319,7 +339,7 @@ const server = createServer(async (req, res) => {
     res.end("not found");
   } catch (err) {
     console.error(`${req.method} ${url.pathname}:`, err.message);
-    json(res, 400, { error: err.message });
+    json(res, err instanceof ConflictError ? 409 : 400, { error: err.message });
   }
 });
 

@@ -8,26 +8,32 @@
 </head>
 <body>
 <aside id="term"></aside>
+<div id="splitter" role="separator" aria-orientation="vertical" aria-label="ターミナルの幅" tabindex="0" title="ドラッグで幅を変更(ダブルクリックで元に戻す)"></div>
 <main>
   <header id="lib-header">
-    <h1>ライブラリ</h1>
+    <h1>PJ一覧</h1>
     <input id="lib-filter" placeholder="絞り込み" autocomplete="off" aria-label="PJ を絞り込み">
     <form id="new-pj">
       <input id="new-name" placeholder="新規 MV 名(日付は自動)" maxlength="64" autocomplete="off">
       <button>+ 新規</button>
     </form>
-    <span id="msg"></span>
   </header>
   <header id="pj-header" hidden>
-    <button id="back" type="button">← ライブラリ</button>
+    <button id="back" type="button">← PJ一覧</button>
     <strong id="pj-title"></strong>
   </header>
+  <nav id="tabs" hidden>
+    <button type="button" data-tab="drafts">歌詞・スタイル・設定</button>
+    <button type="button" data-tab="songs">曲ライブラリ</button>
+  </nav>
   <div id="lib-bar" hidden></div>
   <section id="library"></section>
+  <section id="drafts" hidden></section>
   <section id="songs" hidden></section>
+  <div id="toasts" aria-live="polite"></div>
 </main>
 <script src="/vendor/xterm.js"></script>
 <script src="/vendor/fit.js"></script>
-<script src="/app.js"></script>
+<script type="module" src="/app.js"></script>
 </body>
 </html>

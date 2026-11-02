@@ -1,7 +1,9 @@
+import { createDraftsTab } from "/drafts.js";
+import { toast } from "/toast.js";
+
 const $ = (id) => document.getElementById(id);
 const libraryBox = $("library");
 const songsBox = $("songs");
-const msg = $("msg");
 
 // The library shows every project; opening one attaches the terminal to that project's Claude session.
 let projects = [];
@@ -36,6 +38,56 @@ function connect(pj) {
   socket.onclose = () => { if (ws === socket) term.write("\r\n[session closed - open the project again to restart]\r\n"); };
   attached = pj;
 }
+
+// ---- splitter: drag the border to resize the terminal; the width is remembered ----
+const SPLIT_KEY = "mv-studio:left-width";
+const DEFAULT_LEFT_PERCENT = 38;
+const MIN_LEFT_PX = 320;
+const MIN_RIGHT_PX = 420;
+const KEY_STEP_PX = 24;
+const splitter = $("splitter");
+let fitFrame = 0;
+
+function setLeftWidth(px) {
+  const max = Math.max(innerWidth - MIN_RIGHT_PX, MIN_LEFT_PX);
+  const clamped = Math.min(Math.max(px, MIN_LEFT_PX), max);
+  document.body.style.setProperty("--left", `${clamped}px`);
+  // Refit once per frame: the terminal must follow the new width without re-rendering on every pixel.
+  cancelAnimationFrame(fitFrame);
+  fitFrame = requestAnimationFrame(() => fit.fit());
+  return clamped;
+}
+
+const savedWidth = Number(localStorage.getItem(SPLIT_KEY));
+if (savedWidth > 0) setLeftWidth(savedWidth);
+const currentLeft = () => $("term").getBoundingClientRect().width;
+
+splitter.addEventListener("pointerdown", (event) => {
+  splitter.setPointerCapture(event.pointerId);
+  splitter.classList.add("drag");
+  document.body.classList.add("dragging");
+});
+splitter.addEventListener("pointermove", (event) => {
+  if (splitter.hasPointerCapture(event.pointerId)) setLeftWidth(event.clientX);
+});
+splitter.addEventListener("pointerup", (event) => {
+  splitter.releasePointerCapture(event.pointerId);
+  splitter.classList.remove("drag");
+  document.body.classList.remove("dragging");
+  localStorage.setItem(SPLIT_KEY, String(Math.round(currentLeft())));
+});
+splitter.addEventListener("dblclick", () => {
+  document.body.style.removeProperty("--left");
+  localStorage.removeItem(SPLIT_KEY);
+  requestAnimationFrame(() => fit.fit());
+});
+splitter.addEventListener("keydown", (event) => {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  event.preventDefault();
+  const next = setLeftWidth(currentLeft() + (event.key === "ArrowRight" ? KEY_STEP_PX : -KEY_STEP_PX));
+  localStorage.setItem(SPLIT_KEY, String(Math.round(next)));
+});
+addEventListener("resize", () => { if (savedWidth > 0 || document.body.style.getPropertyValue("--left")) setLeftWidth(currentLeft()); });
 
 // ---- library ----
 const nameParts = (name) => {
@@ -104,11 +156,14 @@ async function moveSelectedToTrash() {
     body: JSON.stringify({ names }),
   });
   const body = await res.json();
-  if (!res.ok) { msg.textContent = body.error; return; }
+  if (!res.ok) { toast(body.error, { kind: "error" }); return; }
   if (body.moved.includes(attached)) attached = "";
-  msg.textContent = body.failed.length
-    ? `移動できなかった PJ: ${body.failed.map((f) => `${f.name}(${f.error})`).join("、")}`
-    : "";
+  if (body.failed.length) {
+    toast(`移動できなかった PJ: ${body.failed.map((f) => `${f.name}(${f.error})`).join("、")}`, { key: "trash-failed", kind: "error" });
+  }
+  if (body.moved.length) {
+    toast(`${body.moved.length} 件を workspace\\_Trash へ移動しました(戻すときは PJs へ戻します)`, { key: "trash-done" });
+  }
   selected.clear();
   confirming = false;
   libraryKey = null;
@@ -311,28 +366,58 @@ function defRow(label, value) {
 }
 
 // ---- navigation ----
+// Inside a project there are two tabs: the drafting space and the songs.
+let tab = "songs";
+// Puts a line into the project's Claude input and focuses the terminal. Enter stays with the user.
+async function typeToTerminal(text) {
+  const res = await fetch("/api/sessions/type", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ pj: viewing, text }),
+  });
+  if (!res.ok) throw new Error((await res.json()).error);
+  term.focus();
+}
+
+const draftsTab = createDraftsTab({ root: $("drafts"), getProject: () => viewing, typeToTerminal });
+
+function showTab(next) {
+  tab = next;
+  for (const button of document.querySelectorAll("#tabs button")) button.classList.toggle("on", button.dataset.tab === next);
+  $("drafts").hidden = next !== "drafts";
+  songsBox.hidden = next !== "songs";
+  songsKey = null;
+  refreshActiveTab();
+}
+
+const refreshActiveTab = () => (tab === "songs" ? refreshSongs() : draftsTab.refresh());
+
 function showLibrary() {
   viewing = "";
   $("lib-header").hidden = false;
   libraryBox.hidden = false;
   $("pj-header").hidden = true;
+  $("tabs").hidden = true;
+  $("drafts").hidden = true;
   songsBox.hidden = true;
   libraryKey = null;
   loadLibrary();
 }
 
-function openProject(pj) {
+function openProject(pj, preferredTab) {
   // Only a different project restarts the terminal view; the same one just shows its running session.
   if (pj !== attached) connect(pj);
   viewing = pj;
-  songsKey = null;
   $("pj-title").textContent = pj;
   $("lib-header").hidden = true;
   libraryBox.hidden = true;
   $("pj-header").hidden = false;
-  songsBox.hidden = false;
-  refreshSongs();
+  $("tabs").hidden = false;
+  // A project with songs opens on its songs; an empty one opens on the drafting space.
+  showTab(preferredTab ?? (projects.find((p) => p.name === pj)?.songs ? "songs" : "drafts"));
 }
+
+for (const button of document.querySelectorAll("#tabs button")) button.addEventListener("click", () => showTab(button.dataset.tab));
 
 $("back").addEventListener("click", showLibrary);
 $("lib-filter").addEventListener("input", renderLibrary);
@@ -346,11 +431,10 @@ $("new-pj").addEventListener("submit", async (event) => {
     body: JSON.stringify({ name: input.value.trim() }),
   });
   const body = await res.json();
-  if (!res.ok) { msg.textContent = body.error; return; }
-  msg.textContent = "";
+  if (!res.ok) { toast(body.error, { kind: "error" }); return; }
   input.value = "";
-  openProject(body.name);
+  openProject(body.name, "drafts");
 });
 
 showLibrary();
-setInterval(() => (viewing ? refreshSongs() : loadLibrary()), 2500);
+setInterval(() => (viewing ? refreshActiveTab() : loadLibrary()), 2500);
