@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>MV Studio</title>
+<link rel="stylesheet" href="/vendor/xterm.css">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<aside id="term"></aside>
+<main>
+  <header id="lib-header">
+    <h1>ライブラリ</h1>
+    <input id="lib-filter" placeholder="絞り込み" autocomplete="off" aria-label="PJ を絞り込み">
+    <form id="new-pj">
+      <input id="new-name" placeholder="新規 MV 名(日付は自動)" maxlength="64" autocomplete="off">
+      <button>+ 新規</button>
+    </form>
+    <span id="msg"></span>
+  </header>
+  <header id="pj-header" hidden>
+    <button id="back" type="button">← ライブラリ</button>
+    <strong id="pj-title"></strong>
+  </header>
+  <div id="lib-bar" hidden></div>
+  <section id="library"></section>
+  <section id="songs" hidden></section>
+</main>
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/fit.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
