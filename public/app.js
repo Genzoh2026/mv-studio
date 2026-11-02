@@ -209,7 +209,7 @@ async function refreshSongs() {
   const res = await fetch(`/api/songs?pj=${encodeURIComponent(viewing)}`);
   if (!res.ok) return;
   const songs = await res.json();
-  const key = viewing + JSON.stringify(songs.map((s) => [s.path ?? s.sunoId, s.mtime, s.lyrics?.length]));
+  const key = viewing + JSON.stringify(songs.map((s) => [s.path ?? s.sunoId, s.mtime]));
   if (key === songsKey) return;
   songsKey = key;
   if (!songs.length) {
@@ -221,41 +221,93 @@ async function refreshSongs() {
 function songCard(song) {
   const el = document.createElement("section");
   el.className = "song";
+  const head = document.createElement("div");
+  head.className = "song-head";
   const title = document.createElement("h2");
   title.textContent = song.title;
-  el.append(title);
-  if (song.sunoId) {
-    // Not downloaded yet: listen through Suno's own embed (no download credit is spent).
+  head.append(title);
+  if (!song.path) {
     const badge = document.createElement("span");
     badge.className = "badge";
     badge.textContent = "試聴(未ダウンロード)";
-    title.append(" ", badge);
-    const frame = document.createElement("iframe");
-    frame.src = `https://suno.com/embed/${song.sunoId}`;
-    frame.allow = "autoplay";
-    frame.sandbox = "allow-scripts allow-same-origin allow-popups";
-    frame.loading = "lazy";
-    el.append(frame);
-    const info = [song.duration && `${Math.round(song.duration)}秒`, song.style].filter(Boolean).join(" / ");
-    if (info) {
-      const small = document.createElement("div");
-      small.className = "meta";
-      small.textContent = info;
-      el.append(small);
-    }
-  } else {
+    head.append(badge);
+  }
+  if (song.detail.duration) {
+    const dur = document.createElement("span");
+    dur.className = "meta dur";
+    dur.textContent = `${Math.round(song.detail.duration)}秒`;
+    head.append(dur);
+  }
+  el.append(head, player(song));
+  const details = detailsPanel(song);
+  if (details) el.append(details);
+  return el;
+}
+
+function player(song) {
+  if (song.path) {
     const audio = document.createElement("audio");
     audio.controls = true;
     audio.preload = "none";
     audio.src = `/file?pj=${encodeURIComponent(viewing)}&p=${encodeURIComponent(song.path)}`;
-    el.append(audio);
+    return audio;
   }
-  if (song.lyrics) {
+  // Not downloaded yet: listen through Suno's own embed (no download credit is spent).
+  const frame = document.createElement("iframe");
+  frame.src = `https://suno.com/embed/${song.sunoId}`;
+  frame.allow = "autoplay";
+  frame.sandbox = "allow-scripts allow-same-origin allow-popups";
+  frame.loading = "lazy";
+  return frame;
+}
+
+/** Collapsed "詳細": style, what was requested, creation time, lyrics, link to Suno. Null when there is nothing to show. */
+function detailsPanel(song) {
+  const d = song.detail;
+  const created = d.createdAt ? new Date(d.createdAt).toLocaleString("ja-JP") : null;
+  const rows = [
+    ["スタイル", d.style],
+    ["作成", [created, d.kind].filter(Boolean).join(" · ") || null],
+  ].filter(([, value]) => value);
+  if (!rows.length && !d.settings.length && !d.lyrics && !song.sunoId) return null;
+
+  const box = document.createElement("details");
+  box.className = "detail";
+  const summary = document.createElement("summary");
+  summary.textContent = "詳細";
+  const list = document.createElement("dl");
+  for (const [label, value] of rows) list.append(...defRow(label, value));
+  if (d.settings.length) {
+    // Written by Claude at creation time; Suno cannot return these afterwards.
+    list.append(...defRow("生成時の指定", d.settings.map(([k, v]) => `${k}: ${v}`).join(" / ")));
+  }
+  box.append(summary, list);
+  if (d.lyrics) {
+    const label = document.createElement("div");
+    label.className = "meta";
+    label.textContent = "歌詞";
     const pre = document.createElement("pre");
-    pre.textContent = song.lyrics;
-    el.append(pre);
+    pre.className = "lyrics";
+    pre.textContent = d.lyrics;
+    box.append(label, pre);
   }
-  return el;
+  if (song.sunoId) {
+    const link = document.createElement("a");
+    link.href = `https://suno.com/song/${song.sunoId}`;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Suno で開く ↗";
+    box.append(link);
+  }
+  return box;
+}
+
+function defRow(label, value) {
+  const dt = document.createElement("dt");
+  dt.textContent = label;
+  const dd = document.createElement("dd");
+  dd.textContent = value;
+  return [dt, dd];
 }
 
 // ---- navigation ----

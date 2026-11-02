@@ -22,6 +22,9 @@ const MAX_BODY = 4096;
 const AUDIO = new Set([".mp3", ".wav", ".m4a", ".ogg"]);
 const LYRICS_EXTS = [".lrc", ".txt", ".md"];
 const SUNO_META_EXT = ".suno.json";
+const MAX_SETTINGS = 20;
+const MAX_SETTING_KEY = 40;
+const MAX_SETTING_VALUE = 200;
 const SUNO_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SUNO_COVER = /^https:\/\/cdn\d*\.suno\.ai\/[\w.-]+$/;
 const PJ_NAME = /^[\p{L}\p{N}_-]{1,64}$/u;
@@ -40,8 +43,12 @@ const PROJECT_RULES = `# MV project
 - Save every generated asset under \`Output/\`, grouped by kind.
 - Suno downloads are limited per month, so do NOT download right after creating a song.
   Instead, once the song is playable, save \`Output/song/<name>.suno.json\` with:
-  \`{"id": "<clip id>", "title": "...", "duration": <seconds>, "style": "...", "lyrics": "...", "cover": "<cover_image_url>"}\`.
+  \`{"id": "<clip id>", "title": "...", "duration": <seconds>, "style": "...", "lyrics": "...", "cover": "<cover_image_url>",
+  "type": "<metadata.type>", "created_at": "<created_at>", "settings": {...}}\`.
   (\`cover\` is the song's cover_image_url from Suno; the library uses it as the project's thumbnail.)
+  \`settings\` records what YOU passed to the create call (model, mode, instrumental, vocal_gender, weirdness,
+  style_influence, negative_style, target duration, ...), as flat key: value pairs. Suno cannot return these later,
+  so write them down at creation time; the app shows them as "what was requested".
   The app shows an embedded Suno player from it, so the user can listen before deciding.
 - One generation can return several clips (\`clip_ids\`; Suno decides how many). Save ALL of them,
   one file per clip, named \`<title>-1.suno.json\`, \`<title>-2.suno.json\`, ... (a single clip needs no suffix).
@@ -181,13 +188,27 @@ async function readPreview(file, base) {
   return {
     sunoId: data.id,
     title: String(data.title ?? basename(base)),
-    duration: Number(data.duration) || null,
-    style: typeof data.style === "string" ? data.style : null,
     // Shown as an <img>, so only Suno's own CDN is accepted.
     cover: typeof data.cover === "string" && SUNO_COVER.test(data.cover) ? data.cover : null,
-    lyrics: typeof data.lyrics === "string" ? data.lyrics : await readLyrics(base),
+    detail: {
+      style: typeof data.style === "string" ? data.style : null,
+      duration: Number(data.duration) || null,
+      kind: typeof data.type === "string" ? data.type.slice(0, MAX_SETTING_VALUE) : null,
+      createdAt: Number.isNaN(Date.parse(data.created_at)) ? null : new Date(data.created_at).toISOString(),
+      settings: cleanSettings(data.settings),
+      lyrics: typeof data.lyrics === "string" ? data.lyrics : await readLyrics(base),
+    },
     mtime: (await stat(file)).mtimeMs,
   };
+}
+
+/** What Claude asked Suno for at creation time. Only flat primitive values are shown, as text. */
+function cleanSettings(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.entries(value)
+    .filter(([, v]) => ["string", "number", "boolean"].includes(typeof v))
+    .slice(0, MAX_SETTINGS)
+    .map(([k, v]) => [k.slice(0, MAX_SETTING_KEY), String(v).slice(0, MAX_SETTING_VALUE)]);
 }
 
 async function listSongs(pj) {
@@ -211,13 +232,13 @@ async function listSongs(pj) {
       });
     }
   }
-  // Once the mp3 is downloaded, the local player replaces the preview and keeps its lyrics.
+  // Once the mp3 is downloaded, the local player replaces the preview and keeps its details.
   const previewOf = new Map(previews.map((p) => [p.base, p]));
-  const ready = local.map(({ base, ...rest }) => ({
-    ...rest,
-    lyrics: rest.lyrics ?? previewOf.get(base)?.lyrics ?? null,
-    cover: previewOf.get(base)?.cover ?? null,
-  }));
+  const ready = local.map(({ base, lyrics, ...rest }) => {
+    const preview = previewOf.get(base);
+    const detail = preview?.detail ?? { style: null, duration: null, kind: null, createdAt: null, settings: [], lyrics: null };
+    return { ...rest, sunoId: preview?.sunoId ?? null, cover: preview?.cover ?? null, detail: { ...detail, lyrics: lyrics ?? detail.lyrics } };
+  });
   const pending = previews.filter((p) => !downloaded.has(p.base)).map(({ base, ...rest }) => rest);
   return [...ready, ...pending].sort((a, b) => b.mtime - a.mtime);
 }
