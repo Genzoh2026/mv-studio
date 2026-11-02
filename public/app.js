@@ -301,6 +301,7 @@ function songCard(song) {
     badge.textContent = "試聴(未ダウンロード)";
     head.append(badge);
   }
+  if (!song.path && song.name) head.append(downloadButton(song));
   if (song.detail.duration) {
     const dur = document.createElement("span");
     dur.className = "meta dur";
@@ -311,6 +312,29 @@ function songCard(song) {
   const details = detailsPanel(song);
   if (details) el.append(details);
   return el;
+}
+
+/** Puts a one-line, tagged request for exactly this song into Claude's input. Enter stays with the user (a download may spend a credit). */
+function downloadButton(song) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "dl";
+  button.textContent = "⬇ ダウンロードを頼む";
+  button.title = "この曲の mp3 を、Claude に取得して保存してもらいます(ダウンロード枠を使うことがあります)";
+  button.addEventListener("click", async () => {
+    if (!claudeReady) {
+      return toast("Claude Code が見つかりません。左端の ⚙ 設定に導入方法があります。", { key: "dl", kind: "error" });
+    }
+    const name = song.name;
+    const text = `【ダウンロード】曲「${name}」(Output/song/${name}.suno.json)を Suno から mp3 でダウンロードして、Output/song/${name}.mp3 に保存してください。ダウンロード枠を使う場合は、実行する前に、私に確認してください。`;
+    try {
+      await typeToTerminal(text);
+      toast("ターミナルにダウンロードの依頼を入力しました。内容を確認して、左の Enter キーで送信してください。", { key: "dl" });
+    } catch (err) {
+      toast(`ターミナルに入力できませんでした: ${err.message}`, { key: "dl", kind: "error" });
+    }
+  });
+  return button;
 }
 
 function player(song) {

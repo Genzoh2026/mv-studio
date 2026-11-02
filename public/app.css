@@ -122,3 +122,5 @@ body.rail-collapsed #rail-handle { display: block; }
 .panel-body .claude-box a { color: #7cc4ff; display: inline-block; margin: 6px 0; }
 .cmd { margin: 8px 0; }
 .cmd pre { margin: 2px 0 4px; padding: 6px 8px; background: #0e1014; border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.song-head .dl { background: transparent; color: #7cc4ff; border: 1px solid #3a5a7a; border-radius: 6px; padding: 0 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.song-head .dl:hover { background: #22303f; }

@@ -37,7 +37,7 @@ Each draft has two files in `Drafts/`, each with exactly ONE owner:
 
 ## Requests typed by the app's buttons
 
-The draft tab types one of three requests, each starting with a tag. Follow the matching procedure.
+The app types one of these requests, each starting with a tag (1-3 from the draft tab, 4 from a song card). Follow the matching procedure.
 
 1. `【確認】` — review a draft.
    Read `Drafts/<name>.human.json`. If the lyrics are EMPTY (the user gave only a title, style or settings), write an original first draft (a "素案") from them for the user to react to, and say so in the `note`. Otherwise complete the lyrics: keep the user's ideas and wording where they work, give it a
@@ -54,3 +54,9 @@ The draft tab types one of three requests, each starting with a tag. Follow the 
 Suno generation uses the user's generation quota. Never call a create tool unless a request above (2 or 3) or the
 user in chat explicitly asks for it. Before generating, make sure lyrics (unless instrumental) and style are not
 empty; if they are, ask instead of generating.
+4. `【ダウンロード】` — download ONE song (typed by a song card's button).
+   The request names the song and its files. Download only that song, as mp3, with the Suno `audio-download` tool.
+   Call it WITHOUT `confirm` first. If the answer says it would spend a download credit (`requires_credit`), ask the
+   user in chat and call again with `confirm: true` only after an explicit yes; on a no, stop. Use the returned URL
+   exactly as given (it is signed; do not modify it) to fetch the file, save it as `Output/song/<name>.mp3` (the name in
+   the request, the same as its `.suno.json`), and tell the user it is saved. Never download any other song.

@@ -264,7 +264,7 @@ async function listSongs(pj) {
     const detail = preview?.detail ?? { style: null, duration: null, kind: null, createdAt: null, settings: [], lyrics: null };
     return { ...rest, sunoId: preview?.sunoId ?? null, cover: preview?.cover ?? null, detail: { ...detail, lyrics: lyrics ?? detail.lyrics } };
   });
-  const pending = previews.filter((p) => !downloaded.has(p.base)).map(({ base, ...rest }) => rest);
+  const pending = previews.filter((p) => !downloaded.has(p.base)).map(({ base, ...rest }) => ({ ...rest, name: basename(base) }));
   return [...ready, ...pending].sort((a, b) => b.mtime - a.mtime);
 }
 
