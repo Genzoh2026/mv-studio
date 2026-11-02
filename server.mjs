@@ -22,6 +22,11 @@ const MAX_DEPTH = 3;
 const MAX_BODY = 4096;
 const MAX_DRAFT_BODY = 100_000;
 const MAX_TYPED = 600;
+const STARTED_AT = Date.now();
+// start.cmd sets this and relaunches the server when it exits with RESTART_EXIT_CODE.
+const SUPERVISED = process.env.MV_STUDIO_SUPERVISED === "1";
+const RESTART_EXIT_CODE = 75;
+const SHUTDOWN_DELAY_MS = 300;
 const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/;
 const AUDIO = new Set([".mp3", ".wav", ".m4a", ".ogg"]);
 const LYRICS_EXTS = [".lrc", ".txt", ".md"];
@@ -37,6 +42,8 @@ const STATIC = {
   "/app.js": ["public/app.js", "text/javascript"],
   "/drafts.js": ["public/drafts.js", "text/javascript"],
   "/toast.js": ["public/toast.js", "text/javascript"],
+  "/rail.js": ["public/rail.js", "text/javascript"],
+  "/settings.js": ["public/settings.js", "text/javascript"],
   "/app.css": ["public/app.css", "text/css"],
   "/vendor/xterm.js": ["node_modules/@xterm/xterm/lib/xterm.js", "text/javascript"],
   "/vendor/xterm.css": ["node_modules/@xterm/xterm/css/xterm.css", "text/css"],
@@ -284,6 +291,12 @@ function json(res, status, value) {
   res.end(JSON.stringify(value));
 }
 
+/** Ends every Claude session, then exits shortly so the HTTP response above is delivered first. */
+function shutdown(code) {
+  sessions.endAll();
+  setTimeout(() => process.exit(code), SHUTDOWN_DELAY_MS);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${HOST}`);
   try {
@@ -319,6 +332,28 @@ const server = createServer(async (req, res) => {
       const dir = await existingPjDir(body.pj);
       if (!dir) return json(res, 400, { error: "bad project" });
       return json(res, 200, { mtime: await saveHuman(dir, body.name, body.data, body.baseMtime) });
+    }
+    if (url.pathname === "/api/server" && req.method === "GET") {
+      return json(res, 200, {
+        pid: process.pid,
+        port: PORT,
+        workspace: WORKSPACE,
+        startedAt: STARTED_AT,
+        supervised: SUPERVISED,
+        node: process.version,
+        sessions: sessions.running(),
+      });
+    }
+    if (url.pathname === "/api/server/stop" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      json(res, 200, { stopping: true });
+      return shutdown(0);
+    }
+    if (url.pathname === "/api/server/restart" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      if (!SUPERVISED) return json(res, 409, { error: "Restart only works when started with start.cmd." });
+      json(res, 200, { restarting: true });
+      return shutdown(RESTART_EXIT_CODE);
     }
     if (url.pathname === "/api/sessions/type" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });

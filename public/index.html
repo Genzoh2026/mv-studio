@@ -7,6 +7,10 @@
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
+<nav id="rail" aria-label="ツール">
+  <div class="rail-tools"></div>
+  <button type="button" class="rail-collapse" title="バーを畳む" aria-label="バーを畳む">‹</button>
+</nav>
 <aside id="term"></aside>
 <div id="splitter" role="separator" aria-orientation="vertical" aria-label="ターミナルの幅" tabindex="0" title="ドラッグで幅を変更(ダブルクリックで元に戻す)"></div>
 <main>
@@ -32,6 +36,11 @@
   <section id="songs" hidden></section>
   <div id="toasts" aria-live="polite"></div>
 </main>
+<section id="rail-panel" hidden>
+  <header><strong class="panel-title"></strong><button type="button" class="panel-close" aria-label="閉じる">✕</button></header>
+  <div class="panel-body"></div>
+</section>
+<button type="button" id="rail-handle" title="ツールバーを開く" aria-label="ツールバーを開く">›</button>
 <script src="/vendor/xterm.js"></script>
 <script src="/vendor/fit.js"></script>
 <script type="module" src="/app.js"></script>

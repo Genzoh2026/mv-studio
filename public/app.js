@@ -1,5 +1,7 @@
 import { createDraftsTab } from "/drafts.js";
 import { toast } from "/toast.js";
+import { createRail } from "/rail.js";
+import { settingsTool } from "/settings.js";
 
 const $ = (id) => document.getElementById(id);
 const libraryBox = $("library");
@@ -44,12 +46,14 @@ const SPLIT_KEY = "mv-studio:left-width";
 const DEFAULT_LEFT_PERCENT = 38;
 const MIN_LEFT_PX = 320;
 const MIN_RIGHT_PX = 420;
+const SPLITTER_PX = 8;
 const KEY_STEP_PX = 24;
 const splitter = $("splitter");
 let fitFrame = 0;
 
 function setLeftWidth(px) {
-  const max = Math.max(innerWidth - MIN_RIGHT_PX, MIN_LEFT_PX);
+  const railPx = $("rail").getBoundingClientRect().width;
+  const max = Math.max(innerWidth - railPx - SPLITTER_PX - MIN_RIGHT_PX, MIN_LEFT_PX);
   const clamped = Math.min(Math.max(px, MIN_LEFT_PX), max);
   document.body.style.setProperty("--left", `${clamped}px`);
   // Refit once per frame: the terminal must follow the new width without re-rendering on every pixel.
@@ -68,7 +72,7 @@ splitter.addEventListener("pointerdown", (event) => {
   document.body.classList.add("dragging");
 });
 splitter.addEventListener("pointermove", (event) => {
-  if (splitter.hasPointerCapture(event.pointerId)) setLeftWidth(event.clientX);
+  if (splitter.hasPointerCapture(event.pointerId)) setLeftWidth(event.clientX - $("rail").getBoundingClientRect().width);
 });
 splitter.addEventListener("pointerup", (event) => {
   splitter.releasePointerCapture(event.pointerId);
@@ -88,6 +92,15 @@ splitter.addEventListener("keydown", (event) => {
   localStorage.setItem(SPLIT_KEY, String(Math.round(next)));
 });
 addEventListener("resize", () => { if (savedWidth > 0 || document.body.style.getPropertyValue("--left")) setLeftWidth(currentLeft()); });
+
+// ---- tool rail: add future tools to this list ----
+createRail({
+  rail: $("rail"),
+  panel: $("rail-panel"),
+  handle: $("rail-handle"),
+  tools: [settingsTool],
+  onLayout: () => fit.fit(),
+});
 
 // ---- library ----
 const nameParts = (name) => {
