@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { ConflictError, listDrafts, saveHuman } from "./drafts.mjs";
 import { SessionLimitError, createSessions } from "./sessions.mjs";
+import { DOCS_URL, detectClaude, installCommands, installGuideText } from "./claude-cli.mjs";
 import { codeFingerprint } from "./version.mjs";
 
 const HOST = "127.0.0.1";
@@ -25,6 +26,7 @@ const MAX_DEPTH = 3;
 const MAX_BODY = 4096;
 const MAX_DRAFT_BODY = 100_000;
 const MAX_TYPED = 600;
+const CLAUDE_MISSING_CLOSE_CODE = 4004; // the page shows the server's guide instead of its generic closed message
 const STARTED_AT = Date.now();
 // start.cmd sets this and relaunches the server when it exits with RESTART_EXIT_CODE.
 const SUPERVISED = process.env.MV_STUDIO_SUPERVISED === "1";
@@ -66,15 +68,35 @@ const SHELL = process.platform === "win32" ? "powershell.exe" : process.env.SHEL
 const MCP_CONFIG = join(HERE, "suno.mcp.json");
 const RULES_FILE = join(HERE, "rules", "mv-studio.md");
 const quote = (s) => `'${s.replaceAll("'", process.platform === "win32" ? "''" : "'\\''")}'`;
-const CLAUDE_COMMAND = `claude --mcp-config ${quote(MCP_CONFIG)} --append-system-prompt-file ${quote(RULES_FILE)}`;
-const SHELL_ARGS = process.platform === "win32" ? ["-NoLogo", "-NoExit", "-Command", CLAUDE_COMMAND] : ["-lc", `${CLAUDE_COMMAND}; exec "$SHELL"`];
+// Where the Claude CLI is. Re-detected on demand: it may be installed while the app is running.
+let claude = await detectClaude();
+if (!claude.found) console.warn("Claude Code was not found.\n" + installGuideText());
+
+/** The shell command line that starts Claude with the app's MCP config and rules. */
+function claudeCommandLine() {
+  const run = claude.command === "claude" || !claude.command ? "claude"
+    : process.platform === "win32" ? `& ${quote(claude.command)}` : quote(claude.command);
+  return `${run} --mcp-config ${quote(MCP_CONFIG)} --append-system-prompt-file ${quote(RULES_FILE)}`;
+}
+const shellArgs = () => process.platform === "win32"
+  ? ["-NoLogo", "-NoExit", "-Command", claudeCommandLine()]
+  : ["-lc", `${claudeCommandLine()}; exec "$SHELL"`];
+
+/** What the page needs to know about the CLI, including how to install it when it is missing. */
+const claudeStatus = () => ({
+  found: claude.found,
+  version: claude.version,
+  where: claude.where,
+  platform: process.platform,
+  install: claude.found ? null : { docs: DOCS_URL, commands: installCommands() },
+});
 
 // Drop the parent session's markers, or a Claude started from inside Claude runs as a child session.
 function childEnv() {
   return Object.fromEntries(Object.entries(process.env).filter(([k, v]) => v !== undefined && !/^CLAUDE_?CODE/i.test(k)));
 }
 
-const sessions = createSessions({ command: SHELL, args: SHELL_ARGS, env: childEnv });
+const sessions = createSessions({ command: SHELL, args: shellArgs, env: childEnv });
 
 /** Resolve a project name from the client to its folder, or null. The name must be a plain folder name under PJs. */
 function pjDir(name) {
@@ -344,9 +366,15 @@ const server = createServer(async (req, res) => {
         startedAt: STARTED_AT,
         supervised: SUPERVISED,
         codeVersion: CODE_VERSION,
+        claude: claudeStatus(),
         node: process.version,
         sessions: sessions.running(),
       });
+    }
+    if (url.pathname === "/api/claude/recheck" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      claude = await detectClaude();
+      return json(res, 200, claudeStatus());
     }
     if (url.pathname === "/api/server/stop" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
@@ -388,8 +416,17 @@ wss.on("connection", async (ws, req) => {
   if (!sameOrigin(req)) return ws.close(1008, "bad origin");
   const dir = pjDir(new URL(req.url, `http://${HOST}`).searchParams.get("pj"));
   if (!dir || !(await stat(dir).then((s) => s.isDirectory(), () => false))) return ws.close(1008, "bad project");
+  const name = basename(dir);
+  // A new session needs the CLI; one that is already running obviously has it.
+  if (!sessions.running().includes(name)) {
+    if (!claude.found) claude = await detectClaude();
+    if (!claude.found) {
+      ws.send(`\r\n${installGuideText().replaceAll("\n", "\r\n")}\r\n`);
+      return ws.close(CLAUDE_MISSING_CLOSE_CODE, "claude not found");
+    }
+  }
   try {
-    sessions.attach(basename(dir), dir, ws);
+    sessions.attach(name, dir, ws);
   } catch (err) {
     if (!(err instanceof SessionLimitError)) throw err;
     ws.send(`\r\n[${err.message}]\r\n`);

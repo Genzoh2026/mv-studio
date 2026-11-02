@@ -11,7 +11,20 @@ monthly download credit.
 
 ## 使い方 / Quick start
 
-必要なもの / Requirements: Node.js 20+, [Claude Code](https://claude.com/claude-code) (`claude` on PATH), a Suno account.
+必要なもの / Requirements: Node.js 20+, [Claude Code](https://code.claude.com/docs/en/setup), a Suno account.
+
+**Claude Code の導入(まだの場合)** — 公式の手順は [こちら](https://code.claude.com/docs/en/setup)。
+
+| 環境 | コマンド |
+|---|---|
+| Windows (PowerShell) | `irm https://claude.ai/install.ps1 \| iex` |
+| Windows (WinGet) | `winget install Anthropic.ClaudeCode` |
+| macOS / Linux / WSL | `curl -fsSL https://claude.ai/install.sh \| bash` |
+| macOS (Homebrew) | `brew install --cask claude-code` |
+
+導入後、新しいターミナルで `claude --version` を実行して確認します。初回は `claude` を起動して、ブラウザでログインします(Pro / Max / Team / Enterprise / Console のいずれかが必要です)。
+
+**Claude Code が見つからないとき**: アプリは起動しますが、PJ を開いても Claude は動きません。左のターミナルに導入案内が出て、左端の ⚙ 設定に(赤い点が付き)コマンドと「再確認」ボタンが表示されます。歌詞タブの依頼ボタンは無効になります。導入後は「再確認」を押してください(ネイティブ版の `~/.local/bin/claude` は、再起動なしで見つかります。ほかの導入方法で見つからないときは、アプリを再起動してください — PATH は起動時に読み込まれます)。
 
 ```
 git clone <this repo>
@@ -39,6 +52,7 @@ npm start -- [workspace] [port] # same launcher; default port 4200, workspace ..
 | 完成させて生成まで任せる | 完成させて、その内容で Suno に生成を依頼します |
 | この案で生成 | 左の案をそのまま Suno に投げます |
 
+- 歌詞が**空のままでも**、曲名とスタイルだけで、Claude が**素案**を提案します(「Claude に確認を頼む」を押します)。
 - 人の案と Claude の案は、**別々のファイル**です。アプリが書くのは人の案だけ、Claude が書くのは Claude の案だけなので、上書きし合いません。
 - 右の案が良ければ「この案を左に取り込む」でコピーします(保存するまで、あなたの案は変わりません)。
 - 歌詞には「元に戻す / やり直す」(Ctrl+Z / Ctrl+Shift+Z)があります。

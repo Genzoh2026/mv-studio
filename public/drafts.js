@@ -18,7 +18,7 @@ const jsonHeaders = { "content-type": "application/json" };
  * @param {{root: HTMLElement, getProject: () => string, typeToTerminal: (text: string) => Promise<void>}} options
  *   typeToTerminal puts one line into the project's Claude input; it never presses Enter.
  */
-export function createDraftsTab({ root, getProject, typeToTerminal }) {
+export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeReady = () => true }) {
   let pj = "";
   let drafts = [];
   let current = "";
@@ -65,6 +65,7 @@ export function createDraftsTab({ root, getProject, typeToTerminal }) {
   const autoBtn = h("button", { type: "button", textContent: "完成させて生成まで任せる", title: "Claude が完成させ、その内容で Suno に生成を依頼します" });
   const genBtn = h("button", { type: "button", textContent: "この案で生成", title: "左の案をそのまま Suno に投げます" });
   const askButtons = [askBtn, autoBtn, genBtn];
+  const askTitles = new Map(askButtons.map((button) => [button, button.title]));
   const status = h("span", { className: "meta" });
   const bar = h("div", { className: "draft-bar" });
   const claudeBox = h("section", { className: "col claude" });
@@ -126,9 +127,10 @@ export function createDraftsTab({ root, getProject, typeToTerminal }) {
     saveBtn.disabled = !enabled || !isDirty() || stale;
     // Claude reads the saved file, so asking only makes sense when the form matches it.
     const askable = enabled && baseMtime !== null && !isDirty() && !stale;
+    const claudeReady = isClaudeReady();
     for (const button of askButtons) {
-      button.disabled = !askable;
-      button.dataset.why = askable ? "" : "先に保存してください";
+      button.disabled = !askable || !claudeReady;
+      button.title = claudeReady ? askTitles.get(button) : "Claude Code が見つかりません。左端の ⚙ 設定に導入方法があります";
     }
     if (enabled && isDirty()) status.textContent = "未保存の変更があります";
   }

@@ -11,7 +11,7 @@ const DEFAULT_ROWS = 30;
 export class SessionLimitError extends Error {}
 
 /**
- * @param {{command: string, args: string[], env: () => Record<string, string>}} launch how to start the CLI
+ * @param {{command: string, args: string[] | (() => string[]), env: () => Record<string, string>}} launch how to start the CLI
  */
 export function createSessions({ command, args, env }) {
   /** @type {Map<string, {term: import("@lydell/node-pty").IPty, buffer: string, clients: Set<import("ws").WebSocket>}>} */
@@ -23,7 +23,7 @@ export function createSessions({ command, args, env }) {
     if (sessions.size >= MAX_SESSIONS) {
       throw new SessionLimitError(`Up to ${MAX_SESSIONS} sessions can run at once. End one from the library first.`);
     }
-    const term = pty.spawn(command, args, { name: "xterm-256color", cols: DEFAULT_COLS, rows: DEFAULT_ROWS, cwd, env: env() });
+    const term = pty.spawn(command, typeof args === "function" ? args() : args, { name: "xterm-256color", cols: DEFAULT_COLS, rows: DEFAULT_ROWS, cwd, env: env() });
     const session = { term, buffer: "", clients: new Set() };
     term.onData((data) => {
       // Kept so a reattaching tab can show what happened while it was away.

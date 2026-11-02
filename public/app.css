@@ -113,3 +113,12 @@ body.rail-collapsed #rail-handle { display: block; }
 .panel-body button:disabled { opacity: 0.4; cursor: not-allowed; }
 .panel-body button.danger { background: #7a2e2e; border-color: #a54343; }
 .panel-body .meta { margin: 8px 0 0; }
+.rail-btn { position: relative; }
+.rail-btn.alert::after { content: ""; position: absolute; top: 3px; right: 3px; width: 9px; height: 9px; border-radius: 50%; background: #d9534f; border: 1px solid #101216; }
+.panel-body .ok { color: #6fd38c; margin: 0; }
+.panel-body .bad { color: #e5a64b; margin: 0 0 4px; font-weight: 600; }
+.panel-body .claude-box { margin-bottom: 16px; }
+.panel-body .claude-box p { margin: 4px 0; }
+.panel-body .claude-box a { color: #7cc4ff; display: inline-block; margin: 6px 0; }
+.cmd { margin: 8px 0; }
+.cmd pre { margin: 2px 0 4px; padding: 6px 8px; background: #0e1014; border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }

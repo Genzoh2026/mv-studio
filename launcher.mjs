@@ -9,6 +9,7 @@ import net from "node:net";
 import { dirname, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
+import { detectClaude, installGuideText } from "./claude-cli.mjs";
 import { codeFingerprint } from "./version.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -110,6 +111,8 @@ async function attach(info, currentVersion) {
 /** Run the server here; start it again whenever it exits asking for a restart. */
 async function serve() {
   await mkdir(workspace, { recursive: true });
+  // Not fatal: the library and drafts work without it, but nothing can talk to Claude.
+  if (!(await detectClaude()).found) console.log(`\n${installGuideText()}\n`);
   const opened = waitUntil(probe, WAIT_UP_MS).then((up) => { if (up) openBrowser(); });
   for (;;) {
     const child = spawn(process.execPath, [resolve(HERE, "server.mjs"), workspace], {

@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 
-const ROOT_FILES = ["server.mjs", "sessions.mjs", "drafts.mjs", "version.mjs", "suno.mcp.json", "package.json"];
+const ROOT_FILES = ["server.mjs", "sessions.mjs", "drafts.mjs", "claude-cli.mjs", "version.mjs", "suno.mcp.json", "package.json"];
 const DIRS = ["public", "rules"];
 
 async function* filesIn(dir) {

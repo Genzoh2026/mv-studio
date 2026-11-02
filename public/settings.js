@@ -29,11 +29,56 @@ export const settingsTool = {
     const rows = h("dl", { className: "info" });
     const actions = h("div", { className: "panel-actions" });
     const note = h("p", { className: "meta" });
-    body.append(h("h4", { textContent: "サーバー" }), rows, actions, note);
+    const claudeBox = h("div", { className: "claude-box" });
+    body.append(h("h4", { textContent: "Claude Code" }), claudeBox, h("h4", { textContent: "サーバー" }), rows, actions, note);
 
     let status = null;
     let confirming = null; // "restart" | "stop" | null
     let finished = false;  // the server was stopped or is restarting: stop polling it
+
+    function copyButton(text) {
+      return h("button", {
+        type: "button", textContent: "コピー",
+        onclick: async () => { await navigator.clipboard.writeText(text); toast("コピーしました", { key: "copied" }); },
+      });
+    }
+
+    async function recheck() {
+      const res = await post("/api/claude/recheck");
+      if (!res.ok) return toast((await res.json()).error, { key: "claude", kind: "error" });
+      if (status) status.claude = await res.json();
+      renderClaude();
+      document.dispatchEvent(new CustomEvent("claude-status", { detail: status?.claude }));
+      toast(status?.claude?.found ? `Claude Code を検出しました(${status.claude.version})` : "まだ見つかりません", {
+        key: "claude", kind: status?.claude?.found ? "info" : "warn",
+      });
+    }
+
+    /** Install help is shown only while the CLI is missing; the commands come from the server (official docs). */
+    function renderClaude() {
+      const claude = status?.claude;
+      const recheckBtn = h("button", { type: "button", textContent: "再確認", onclick: recheck });
+      if (!claude) return claudeBox.replaceChildren(h("p", { className: "meta", textContent: "確認中…" }));
+      if (claude.found) {
+        return claudeBox.replaceChildren(
+          h("p", { className: "ok", textContent: `検出済み: ${claude.version}` }),
+          h("p", { className: "meta", textContent: claude.where }),
+          recheckBtn,
+        );
+      }
+      claudeBox.replaceChildren(
+        h("p", { className: "bad", textContent: "Claude Code が見つかりません" }),
+        h("p", { className: "meta", textContent: "次のコマンドで導入できます(公式の手順)。" }),
+        ...claude.install.commands.map((c) => h("div", { className: "cmd" },
+          h("span", { className: "meta", textContent: c.label }),
+          h("pre", { textContent: c.command }),
+          copyButton(c.command),
+        )),
+        h("a", { href: claude.install.docs, target: "_blank", rel: "noopener noreferrer", textContent: "公式の導入手順を開く ↗" }),
+        h("p", { className: "meta", textContent: "導入したら「再確認」を押します。見つからないままなら、アプリを再起動してください(PATH は起動時に読み込まれます)。初回は claude を起動して、ブラウザでログインします(Pro / Max / Team / Enterprise / Console のいずれかが必要です)。" }),
+        recheckBtn,
+      );
+    }
 
     function renderInfo() {
       const s = status;
@@ -79,6 +124,8 @@ export const settingsTool = {
         if (res.ok) status = await res.json();
       } catch { /* the server may be going down; keep the last status */ }
       renderInfo();
+      renderClaude();
+      if (status) document.dispatchEvent(new CustomEvent("claude-status", { detail: status.claude }));
       if (!confirming) renderActions();
     }
 
@@ -117,6 +164,7 @@ export const settingsTool = {
     }
 
     renderInfo();
+    renderClaude();
     renderActions();
     load();
     const timer = setInterval(load, REFRESH_MS);

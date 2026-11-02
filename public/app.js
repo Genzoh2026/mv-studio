@@ -19,6 +19,7 @@ term.loadAddon(fit);
 term.open($("term"));
 term.write("プロジェクトを開くと、ここで Claude が起動します。\r\n");
 let ws = null;
+const CLAUDE_MISSING_CLOSE_CODE = 4004; // the server already printed install help into the terminal
 
 const sendSize = (cols = term.cols, rows = term.rows) => ws?.readyState === 1 && ws.send(`\u0000resize:${cols},${rows}`);
 term.onData((data) => ws?.readyState === 1 && ws.send(data));
@@ -37,7 +38,7 @@ function connect(pj) {
     setTimeout(() => sendSize(), 80);
   };
   socket.onmessage = (event) => term.write(event.data);
-  socket.onclose = () => { if (ws === socket) term.write("\r\n[session closed - open the project again to restart]\r\n"); };
+  socket.onclose = (event) => { if (ws === socket && event.code !== CLAUDE_MISSING_CLOSE_CODE) term.write("\r\n[session closed - open the project again to restart]\r\n"); };
   attached = pj;
 }
 
@@ -392,7 +393,24 @@ async function typeToTerminal(text) {
   term.focus();
 }
 
-const draftsTab = createDraftsTab({ root: $("drafts"), getProject: () => viewing, typeToTerminal });
+// Whether the Claude CLI is installed; the settings panel shows how to install it when it is not.
+let claudeReady = true;
+const RAIL_POLL_MS = 10_000;
+function setClaudeStatus(claude) {
+  claudeReady = !claude || claude.found;
+  document.querySelector(".rail-btn")?.classList.toggle("alert", !claudeReady);
+}
+document.addEventListener("claude-status", (event) => setClaudeStatus(event.detail));
+async function pollClaudeStatus() {
+  try {
+    const res = await fetch("/api/server", { cache: "no-store" });
+    if (res.ok) setClaudeStatus((await res.json()).claude);
+  } catch { /* the server may be restarting */ }
+}
+pollClaudeStatus();
+setInterval(pollClaudeStatus, RAIL_POLL_MS);
+
+const draftsTab = createDraftsTab({ root: $("drafts"), getProject: () => viewing, typeToTerminal, isClaudeReady: () => claudeReady });
 
 function showTab(next) {
   tab = next;
