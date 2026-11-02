@@ -1,10 +1,11 @@
 # MV Studio
 
-左に **Claude Code のターミナル**、右に **作った曲(ライブラリ)** を並べる、ローカルで動く小さなアプリです。
-Suno で作った曲を、ダウンロード枠を使わずに試聴し、気に入ったものだけを資産として残せます。
+左に **Claude Code のターミナル**、右に **歌詞づくりと曲の一覧** を並べる、ローカルで動く小さなアプリです。
+歌詞・スタイル・設定を人と Claude で一緒に作り、Suno に生成を依頼し、できた曲をダウンロードする前に試聴できます。
 
-A small local app: a real **Claude Code terminal** on the left, your **songs (library)** on the right.
-Listen to Suno songs *before* spending a monthly download credit, and keep only the ones you like.
+A small local app: a real **Claude Code terminal** on the left, a **drafting space and your songs** on the right.
+Write lyrics, style and settings together with Claude, send them to Suno, and listen to the results *before* spending a
+monthly download credit.
 
 > Status: early and deliberately small. Verified on Windows only. / 初期段階で、あえて小さくしています。動作確認は Windows のみです。
 
@@ -21,37 +22,61 @@ npm install
 node server.mjs <workspace>     # default port 4200 (PORT=... to change)
 ```
 
-1. ライブラリで「+ 新規」から MV の名前を入力 → PJ ができ、左で Claude が起動します。
+1. **PJ一覧**で「+ 新規」から MV の名前を入力 → PJ ができ、左で Claude が起動します。
 2. 初回は Claude のフォルダ信頼を承認し、`/mcp` で Suno にサインインします。
-3. 「Suno で曲を作って、試聴用に保存して」と頼むと、右にカードが出ます。Suno のプレーヤーでその場で聴けます。
-4. 残したい曲だけ、Claude に「ダウンロードして」と頼みます(ダウンロード枠を使うので、都度確認が入ります)。
+3. **歌詞・スタイル・設定** タブで、左の「人の案」に曲名・スタイル・歌詞・設定を書いて保存します。
+4. 右の「Claude の修正案」を見ながら進めます(下の「Claude との流れ」)。
+5. できた曲は **曲ライブラリ** タブに出ます。Suno のプレーヤーでその場で聴けます。
+6. 残したい曲だけ、Claude に「ダウンロードして」と頼みます(ダウンロード枠を使うので、都度確認が入ります)。
+
+## Claude との流れ / Working with Claude
+
+歌詞タブの 3 つのボタンは、ターミナルに **1 行の依頼を入力するだけ** です。送信(Enter)はあなたが押します。
+
+| ボタン | Claude がすること |
+|---|---|
+| Claude に確認を頼む | 人の案を読み、歌詞などを完成させて右に出します。**Suno にはまだ投げません** |
+| 完成させて生成まで任せる | 完成させて、その内容で Suno に生成を依頼します |
+| この案で生成 | 左の案をそのまま Suno に投げます |
+
+- 人の案と Claude の案は、**別々のファイル**です。アプリが書くのは人の案だけ、Claude が書くのは Claude の案だけなので、上書きし合いません。
+- 右の案が良ければ「この案を左に取り込む」でコピーします(保存するまで、あなたの案は変わりません)。
+- 歌詞には「元に戻す / やり直す」(Ctrl+Z / Ctrl+Shift+Z)があります。
+- 編集中にファイルが外で更新された場合は、通知を出して保存を止めます(上書き事故の防止)。
+- Suno の生成枠を使うのは、下 2 つのボタンと、あなたが明示的に頼んだときだけです。
 
 ## 仕組み / How it works
 
 ```
 <workspace>/
   PJs/<YYYYMMDD-name>/        one folder per MV (Claude runs here)
-    CLAUDE.md                 tells Claude where to save things
-    Output/song/              <name>.suno.json (preview) -> <name>.mp3 (downloaded)
+    Drafts/<name>.human.json    your draft (only the app writes it)
+    Drafts/<name>.claude.json   Claude's suggestion (only Claude writes it)
+    Output/song/                <name>.suno.json (preview) -> <name>.mp3 (downloaded)
   _Trash/                     "deleted" projects are moved here, never erased
 ```
 
-- **フォルダが API**: Claude がファイルを書き、アプリは読むだけです。アプリは Suno の API を直接呼びません。
-- **試聴**: Claude が `<name>.suno.json`(ID、タイトル、歌詞など)を保存し、アプリが Suno の埋め込みプレーヤー(`suno.com/embed/<id>`)を表示します。同名の mp3 が入るとローカルのプレーヤーに切り替わります。
-- **Suno の接続**: アプリが `claude --mcp-config suno.mcp.json` で起動時に渡します。あなたの Claude の設定は書き換えません。
-- **セッション保持**: PJ ごとの Claude はタブを閉じても、PJ を切り替えても動き続けます(同時に 5 つまで)。ライブラリの「終了」で止めます。
-- **削除**: ライブラリでチェックして「ゴミ箱へ移動」。`_Trash` へ移るだけで、完全には消えません。実行中の PJ は移せません。
+- **フォルダが API**: アプリは Suno を直接呼びません。Claude がファイルを書き、アプリが読みます。
+- **ルールは起動時に渡す**: Claude の振る舞い(保存場所、ボタンの意味、生成の手順)は `rules/mv-studio.md` に書かれ、`--append-system-prompt-file` で毎回渡されます。PJ の `CLAUDE.md` はあなたのメモ用です。
+- **試聴**: Claude が `<name>.suno.json`(ID、タイトル、歌詞、生成時の指定など)を保存し、アプリが Suno の埋め込みプレーヤーを表示します。同名の mp3 が入るとローカルのプレーヤーに切り替わります。
+- **Suno の接続**: `claude --mcp-config suno.mcp.json` で起動時に渡します。あなたの Claude の設定は書き換えません。
+- **セッション保持**: PJ ごとの Claude はタブを閉じても、PJ を切り替えても動き続けます(同時に 5 つまで)。PJ一覧の「終了」で止めます。サーバーを止めると、すべて終了します。
+- **削除**: PJ一覧でチェックして「ゴミ箱へ移動」。`_Trash` へ移るだけで、完全には消えません。実行中の PJ は移せません。
+- **画面**: 左のターミナルと右の境界はドラッグで動かせます(ダブルクリックで元に戻る)。
 
 ## セキュリティ / Security
 
-- `127.0.0.1` のみで待ち受けます。WebSocket とフォルダを変更する API は同一オリジンのみ受け付けます。
+- `127.0.0.1` のみで待ち受けます。WebSocket とファイルを変更する API は、同一オリジンのみ受け付けます。
 - ターミナルは、あなたの PC でシェルを動かします。**ポートを外部に公開しないでください。**
+- ボタンがターミナルに入力する文字列は 1 行のみで、改行や制御文字は拒否されます(勝手に送信されません)。
 - 音声ファイルは、PJ の `Output/` 内のものだけを配信します。
 
 ## 既知の制限 / Known limits
 
 - Windows 以外(macOS / Linux)は未確認です。`Output`(大文字)と `output`(小文字)は、Windows では同じフォルダ扱いです。
 - Suno にサインインしていないブラウザで、非公開曲の埋め込みが再生できるかは未確認です。
+- 「完成させて生成まで任せる」「この案で生成」は、Suno の生成枠を使うため、開発中は通しで検証できていません。
+- Claude が `Drafts/*.claude.json` や `suno.json` を、ルールどおりに書くことに依存しています(壊れていた場合は、画面にエラーを出し、ファイルには触れません)。
 - 1 回の生成で何曲できるかは Suno 側の仕様です。返ってきた曲は全部カードになります。
 - 自動テストはありません。
 
