@@ -27,8 +27,8 @@ monthly download credit.
 **Claude Code が見つからないとき**: アプリは起動しますが、PJ を開いても Claude は動きません。左のターミナルに導入案内が出て、左端の ⚙ 設定に(赤い点が付き)コマンドと「再確認」ボタンが表示されます。歌詞タブの依頼ボタンは無効になります。導入後は「再確認」を押してください(ネイティブ版の `~/.local/bin/claude` は、再起動なしで見つかります。ほかの導入方法で見つからないときは、アプリを再起動してください — PATH は起動時に読み込まれます)。
 
 ```
-git clone <this repo>
-cd <this repo>
+git clone https://github.com/Genzoh2026/mv-studio.git
+cd mv-studio
 start.cmd [workspace] [port]    # Windows: installs dependencies on first run, opens the browser
 # or, anywhere:
 npm install
