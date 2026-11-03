@@ -13,6 +13,12 @@ const h = (tag, props = {}, ...children) => {
 };
 
 const jsonHeaders = { "content-type": "application/json" };
+const SUNO_UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
+const MODE_OPTIONS = [["new", "新規に作る"], ["cover", "カバー(Remix)"]];
+function labelled(label, control) {
+  return h("label", { className: "field" }, h("span", { className: "meta", textContent: label }), control);
+}
+const blankDraft = (title = "") => ({ title, style: "", lyrics: "", settings: { vocal_gender: "", instrumental: false, mode: "new" } });
 
 /**
  * @param {{root: HTMLElement, getProject: () => string, typeToTerminal: (text: string) => Promise<void>}} options
@@ -21,6 +27,8 @@ const jsonHeaders = { "content-type": "application/json" };
 export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeReady = () => true }) {
   let pj = "";
   let drafts = [];
+  let songs = []; // this project's songs with a Suno id: the choices for a cover's source
+  let voices = { fetched: false, voices: [] };
   let current = "";
   let baseMtime = null; // mtime of the human file as loaded; sent back on save to detect outside changes
   let savedJson = "";
@@ -57,7 +65,17 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
     influence: h("input", { type: "number", min: 0, max: 1, step: 0.05 }),
     instrumental: h("input", { type: "checkbox" }),
     duration: h("input", { type: "number", min: 15, max: 360, step: 1 }),
+    mode: h("select", {}, ...MODE_OPTIONS.map(([v, t]) => new Option(t, v))),
+    source: h("select", {}),
+    sourceManual: h("input", { placeholder: "一覧にない曲: Suno の曲の URL か ID", autocomplete: "off" }),
+    voice: h("select", {}),
+    audioInfluence: h("input", { type: "number", min: 0, max: 1, step: 0.05 }),
+    negativeStyle: h("input", { maxLength: 1000, placeholder: "例: polka, accordion" }),
   };
+  const voiceRefreshBtn = h("button", { type: "button", textContent: "Voice 一覧を取得", title: "Claude が Suno から自分の Voice 一覧を取って保存します(生成枠は使いません)" });
+  const sourceRow = h("div", { className: "mode-block" }, labelled("元の曲(カバーするもの)", fields.source), fields.sourceManual,
+    labelled("元の音への近さ (0-1)", fields.audioInfluence));
+  const voiceRow = h("div", { className: "mode-block" }, labelled("Voice(この声で歌わせる)", fields.voice), voiceRefreshBtn);
   const undoBtn = h("button", { type: "button", textContent: "↶ 元に戻す", title: "Ctrl+Z" });
   const redoBtn = h("button", { type: "button", textContent: "↷ やり直す", title: "Ctrl+Shift+Z / Ctrl+Y" });
   const saveBtn = h("button", { type: "button", className: "primary", textContent: "保存" });
@@ -70,6 +88,10 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
   const bar = h("div", { className: "draft-bar" });
   const claudeBox = h("section", { className: "col claude" });
   const field = (label, control) => h("label", { className: "field" }, h("span", { className: "meta", textContent: label }), control);
+  // Rarely changed options live in a collapsed block; its summary line shows what is set so nothing hides silently.
+  const advancedSummary = h("summary", { textContent: "詳細設定" });
+  const advanced = h("details", { className: "advanced" }, advancedSummary,
+    field("作り方", fields.mode), sourceRow, voiceRow, field("避けたいスタイル", fields.negativeStyle));
   const humanBox = h("section", { className: "col human" },
     h("h3", { textContent: "人の案(あなたが編集)" }),
     field("曲名", fields.title),
@@ -83,6 +105,7 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
       field("長さ(秒)", fields.duration),
       h("label", { className: "field check" }, fields.instrumental, h("span", { textContent: "インスト(歌なし)" })),
     ),
+    advanced,
     h("div", { className: "save-row" }, saveBtn, status),
     h("div", { className: "ask-row" }, ...askButtons),
   );
@@ -102,8 +125,55 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
         style_influence: numberOrNull(fields.influence),
         instrumental: fields.instrumental.checked,
         duration: numberOrNull(fields.duration),
+        mode: fields.mode.value,
+        source_id: sourceIdFromForm(),
+        source_title: sourceTitleFromForm(),
+        audio_influence: numberOrNull(fields.audioInfluence),
+        voice_id: fields.voice.value,
+        voice_name: fields.voice.selectedOptions[0]?.dataset.name ?? "",
+        negative_style: fields.negativeStyle.value,
       },
     };
+  }
+
+  /** A pasted Suno URL or id wins over the dropdown; text that holds no id counts as empty. */
+  const manualSourceId = () => SUNO_UUID.exec(fields.sourceManual.value.toLowerCase())?.[0] ?? "";
+  const sourceIdFromForm = () => manualSourceId() || fields.source.value;
+  const sourceTitleFromForm = () => (manualSourceId() ? "" : fields.source.selectedOptions[0]?.dataset.title ?? "");
+
+  /** Fill a dropdown, keeping a saved value that is not in the list visible instead of silently dropping it. */
+  function fillSelect(select, none, entries, selected, missingLabel) {
+    const options = [new Option(none, "")];
+    for (const { value, text } of entries) {
+      const option = new Option(text, value);
+      option.dataset.name = text;
+      option.dataset.title = text;
+      options.push(option);
+    }
+    if (selected && !entries.some((e) => e.value === selected)) {
+      const option = new Option(missingLabel, selected);
+      option.dataset.name = missingLabel;
+      option.dataset.title = missingLabel;
+      options.push(option);
+    }
+    select.replaceChildren(...options);
+    select.value = selected;
+  }
+
+  function renderChoices(sourceId = fields.source.value, voiceId = fields.voice.value, voiceName = "") {
+    fillSelect(fields.source, "(選んでください)", songs.map((song) => ({ value: song.sunoId, text: song.title })), sourceId, "(この PJ の一覧にない曲)");
+    fillSelect(fields.voice, "指定なし", voices.voices.map((v) => ({ value: v.id, text: v.name })), voiceId, voiceName || `${voiceId.slice(0, 8)}…(一覧にない)`);
+  }
+
+  function syncModeUi() {
+    sourceRow.hidden = fields.mode.value !== "cover";
+    const set = [
+      fields.mode.value === "cover" && (sourceIdFromForm() ? "カバー" : "カバー(元の曲が未選択)"),
+      fields.voice.value && `Voice: ${fields.voice.selectedOptions[0]?.dataset.name ?? ""}`,
+      fields.negativeStyle.value && "避けたいスタイル",
+    ].filter(Boolean);
+    advancedSummary.textContent = set.length ? `詳細設定(${set.join(" / ")})` : "詳細設定";
+    voiceRefreshBtn.textContent = voices.fetched ? "Voice 一覧を更新" : "Voice 一覧を取得";
   }
 
   function writeForm(draft) {
@@ -115,6 +185,15 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
     fields.influence.value = draft.settings.style_influence ?? "";
     fields.instrumental.checked = draft.settings.instrumental;
     fields.duration.value = draft.settings.duration ?? "";
+    const { source_id: sourceId = "", voice_id: voiceId = "", voice_name: voiceName = "" } = draft.settings;
+    fields.mode.value = draft.settings.mode ?? "new";
+    fields.audioInfluence.value = draft.settings.audio_influence ?? "";
+    fields.negativeStyle.value = draft.settings.negative_style ?? "";
+    // A source in the list is chosen there; one that is not is shown in the paste box so nothing is lost.
+    const listed = songs.some((song) => song.sunoId === sourceId);
+    fields.sourceManual.value = sourceId && !listed ? sourceId : "";
+    renderChoices(listed ? sourceId : "", voiceId, voiceName);
+    syncModeUi();
   }
 
   const isDirty = () => JSON.stringify(readForm()) !== savedJson;
@@ -122,17 +201,20 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
   function updateUi() {
     const enabled = Boolean(current);
     for (const control of [...Object.values(fields), saveBtn]) control.disabled = !enabled;
+    voiceRefreshBtn.disabled = !enabled || !isClaudeReady();
     undoBtn.disabled = !enabled || history.index === 0;
     redoBtn.disabled = !enabled || history.index >= history.stack.length - 1;
     saveBtn.disabled = !enabled || !isDirty() || stale;
     // Claude reads the saved file, so asking only makes sense when the form matches it.
-    const askable = enabled && baseMtime !== null && !isDirty() && !stale;
+    const needsSource = fields.mode.value === "cover" && !sourceIdFromForm();
+    const askable = enabled && baseMtime !== null && !isDirty() && !stale && !needsSource;
     const claudeReady = isClaudeReady();
     for (const button of askButtons) {
       button.disabled = !askable || !claudeReady;
       button.title = claudeReady ? askTitles.get(button) : "Claude Code が見つかりません。左端の ⚙ 設定に導入方法があります";
     }
     if (enabled && isDirty()) status.textContent = "未保存の変更があります";
+    else if (enabled && needsSource) status.textContent = "カバーには元の曲が必要です";
   }
 
   /** Load the human file's content into the form (used on selection and on outside changes). */
@@ -178,7 +260,7 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
     const side = drafts.find((d) => d.name === name)?.human;
     if (side?.draft) load(side);
     else {
-      writeForm({ title: "", style: "", lyrics: "", settings: { vocal_gender: "", instrumental: false } });
+      writeForm(blankDraft());
       baseMtime = side?.mtime ?? null;
       savedJson = "";
       showMessage(side?.error ? `この案のファイルを読み込めませんでした: ${side.error}` : "", null, "error");
@@ -199,7 +281,7 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
       headers: jsonHeaders,
       body: JSON.stringify({
         pj, name, baseMtime: null,
-        data: { title: name, style: "", lyrics: "", settings: { vocal_gender: "", instrumental: false } },
+        data: blankDraft(name),
       }),
     });
     const body = await res.json();
@@ -238,9 +320,11 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
     generate: (n) => `【この案で生成】下書き「${n}」(Drafts/${n}.human.json)の内容をそのまま使って、Suno に生成を依頼してください。`,
   };
 
+  const voiceRequest = "【Voice更新】Suno の自分の Voice 一覧(voices-list)を取得して、Drafts/voices.json に保存してください。生成はしないでください。";
+
   async function ask(kind) {
     try {
-      await typeToTerminal(requestTexts[kind](current));
+      await typeToTerminal(kind === "voices" ? voiceRequest : requestTexts[kind](current));
       showMessage("ターミナルに依頼を入力しました。内容を確認して、左の Enter キーで送信してください。");
     } catch (err) {
       showMessage(`ターミナルに入力できませんでした: ${err.message}`, null, "error");
@@ -271,6 +355,10 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
       d.settings.style_influence !== null && `style influence: ${d.settings.style_influence}`,
       d.settings.instrumental && "インスト",
       d.settings.duration !== null && `長さ: ${d.settings.duration}秒`,
+      d.settings.mode === "cover" && `カバー元: ${d.settings.source_title || d.settings.source_id || "(未指定)"}`,
+      d.settings.voice_id && `Voice: ${d.settings.voice_name || d.settings.voice_id}`,
+      d.settings.audio_influence !== null && `audio influence: ${d.settings.audio_influence}`,
+      d.settings.negative_style && `避けたいスタイル: ${d.settings.negative_style}`,
     ].filter(Boolean).join(" / ");
     const block = (label, value, cls = "") => h("div", { className: "field" },
       h("span", { className: "meta", textContent: label }), h("div", { className: `ro ${cls}`, textContent: value || "(なし)" }));
@@ -301,19 +389,38 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
     } else apply();
   }
 
+  /** Songs and voices only feed the dropdowns; a failed fetch keeps the previous choices. */
+  async function refreshChoices(project) {
+    const [songsRes, voicesRes] = await Promise.all([
+      fetch(`/api/songs?pj=${encodeURIComponent(project)}`).catch(() => null),
+      fetch(`/api/voices?pj=${encodeURIComponent(project)}`).catch(() => null),
+    ]);
+    if (project !== getProject()) return;
+    const nextSongs = songsRes?.ok ? (await songsRes.json()).filter((song) => song.sunoId) : songs;
+    const nextVoices = voicesRes?.ok ? await voicesRes.json() : voices;
+    const key = (list, voiceData) => JSON.stringify([list.map((song) => [song.sunoId, song.title]), voiceData]);
+    if (key(nextSongs, nextVoices) === key(songs, voices)) return;
+    songs = nextSongs;
+    voices = nextVoices;
+    renderChoices();
+    syncModeUi();
+    updateUi();
+  }
+
   // ---- sync with the folder ----
   async function refresh(force = false) {
     const project = getProject();
     if (project !== pj) {
-      pj = project; drafts = []; current = ""; claudeKey = null; baseMtime = null; savedJson = ""; stale = false;
+      pj = project; drafts = []; songs = []; voices = { fetched: false, voices: [] }; current = ""; claudeKey = null; baseMtime = null; savedJson = ""; stale = false;
       showMessage("");
       resetHistory("");
-      writeForm({ title: "", style: "", lyrics: "", settings: { vocal_gender: "", instrumental: false } });
+      writeForm(blankDraft());
     }
     if (!pj) return;
     const res = await fetch(`/api/drafts?pj=${encodeURIComponent(pj)}`);
     if (!res.ok || pj !== getProject()) return;
     const next = await res.json();
+    await refreshChoices(project);
     const listChanged = JSON.stringify(next.map((d) => d.name)) !== JSON.stringify(drafts.map((d) => d.name));
     drafts = next;
     if (listChanged || !bar.children.length) renderBar();
@@ -358,6 +465,11 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
   askBtn.addEventListener("click", () => ask("ask"));
   autoBtn.addEventListener("click", () => ask("auto"));
   genBtn.addEventListener("click", () => ask("generate"));
+  voiceRefreshBtn.addEventListener("click", () => ask("voices"));
+  for (const control of [fields.mode, fields.source, fields.sourceManual, fields.voice, fields.negativeStyle]) {
+    control.addEventListener("input", syncModeUi);
+    control.addEventListener("change", syncModeUi);
+  }
   updateUi();
 
   return { refresh };

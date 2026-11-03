@@ -7,7 +7,7 @@ import { createReadStream, readFileSync } from "node:fs";
 import { basename, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import { ConflictError, listDrafts, saveHuman } from "./drafts.mjs";
+import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
 import { SessionLimitError, createSessions } from "./sessions.mjs";
 import { DOCS_URL, detectClaude, installCommands, installGuideText } from "./claude-cli.mjs";
 import { codeFingerprint } from "./version.mjs";
@@ -350,6 +350,10 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/drafts" && req.method === "GET") {
       const dir = await existingPjDir(url.searchParams.get("pj"));
       return dir ? json(res, 200, await listDrafts(dir)) : json(res, 400, { error: "bad project" });
+    }
+    if (url.pathname === "/api/voices" && req.method === "GET") {
+      const dir = await existingPjDir(url.searchParams.get("pj"));
+      return dir ? json(res, 200, await readVoices(dir)) : json(res, 400, { error: "bad project" });
     }
     if (url.pathname === "/api/drafts/save" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });

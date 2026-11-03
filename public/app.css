@@ -69,6 +69,12 @@ header button { cursor: pointer; }
 .col button { background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; font: inherit; cursor: pointer; }
 .col button:disabled { opacity: 0.4; cursor: not-allowed; }
 .col button.primary { background: #2b5a8a; border-color: #4a78a8; }
+.advanced { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.advanced > summary { cursor: pointer; color: var(--dim); margin-bottom: 8px; }
+.advanced[open] > summary { color: inherit; }
+.mode-block { margin-bottom: 8px; }
+.mode-block[hidden] { display: none; }
+.mode-block > input { margin-bottom: 8px; }
 .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; margin-top: 8px; }
 .field.check { display: flex; align-items: center; gap: 6px; }
 .save-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }

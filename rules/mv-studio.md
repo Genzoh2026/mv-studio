@@ -32,12 +32,15 @@ Each draft has two files in `Drafts/`, each with exactly ONE owner:
 - `Drafts/<name>.claude.json` is yours. Same fields plus `"note"` (one or two sentences, in Japanese: what you
   changed and why). The app shows the two side by side and lets the user take yours over.
 - Fields: `{"title": "", "style": "", "lyrics": "", "settings": {"vocal_gender": "male|female|", "weirdness": 0-1 or
-  null, "style_influence": 0-1 or null, "instrumental": true|false, "duration": 15-360 or null}}`.
+  null, "style_influence": 0-1 or null, "audio_influence": 0-1 or null, "instrumental": true|false,
+  "duration": 15-360 or null, "mode": "new|cover", "source_id": "", "source_title": "", "voice_id": "",
+  "voice_name": "", "negative_style": ""}}`. A claude.json must keep the user's `mode`, `source_id` and `voice_id`
+  unless you explain the change in the `note`.
 - Write the file in one go (valid JSON, UTF-8). A broken file is shown to the user as an error.
 
 ## Requests typed by the app's buttons
 
-The app types one of these requests, each starting with a tag (1-3 from the draft tab, 4 from a song card). Follow the matching procedure.
+The app types one of these requests, each starting with a tag (1-3 and 5 from the draft tab, 4 from a song card). Follow the matching procedure.
 
 1. `【確認】` — review a draft.
    Read `Drafts/<name>.human.json`. If the lyrics are EMPTY (the user gave only a title, style or settings), write an original first draft (a "素案") from them for the user to react to, and say so in the `note`. Otherwise complete the lyrics: keep the user's ideas and wording where they work, give it a
@@ -51,6 +54,22 @@ The app types one of these requests, each starting with a tag (1-3 from the draf
    Do NOT rewrite it. Use `Drafts/<name>.human.json` exactly as saved (lyrics, style, title, settings), and save the
    clips as described above.
 
+### How a draft is generated, by `settings.mode`
+
+Use these for requests 2 and 3. Pass an option only when it is set (non-empty, non-null); never invent one.
+
+- `new` (default): `audio-create` in custom mode: `lyrics`, `style`, `title`, `negative_style`, `weirdness`,
+  `style_influence`, `vocal_gender`, `instrumental`, `duration`. If `voice_id` is set, pass it (a voice always sings,
+  and `vocal_gender` is then ignored by Suno; `audio_influence` is valid ONLY together with a `voice_id`).
+- `cover`: `audio-covers-create` with `id` = `source_id`. If `source_id` is empty, do not generate: ask. The source's
+  lyrics are NOT carried over, so always pass the draft's `lyrics` (unless instrumental). A cover takes the source's
+  title, so the draft's `title` is only a label for the saved file. Pass `style`, `negative_style`, `voice_id`,
+  `duration`, and `audio_influence` / `weirdness` / `style_influence` as `controls`. The source must be `complete`;
+  if Suno says it is not, tell the user instead of retrying.
+- `controls`, `negative_style` and `vocal_gender` need an advanced-controls grant on the plan. If Suno answers 403
+  for them, say so and offer to retry without them; do not drop them silently.
+- In the saved `.suno.json`, `settings` must also record `mode`, `source_id` and `voice_id` when used.
+
 Suno generation uses the user's generation quota. Never call a create tool unless a request above (2 or 3) or the
 user in chat explicitly asks for it. Before generating, make sure lyrics (unless instrumental) and style are not
 empty; if they are, ask instead of generating.
@@ -60,3 +79,8 @@ empty; if they are, ask instead of generating.
    user in chat and call again with `confirm: true` only after an explicit yes; on a no, stop. Use the returned URL
    exactly as given (it is signed; do not modify it) to fetch the file, save it as `Output/song/<name>.mp3` (the name in
    the request, the same as its `.suno.json`), and tell the user it is saved. Never download any other song.
+5. `【Voice更新】` — refresh the voice list (typed by the draft tab's button).
+   Call `voices-list` (own voices; follow `next_cursor` until done) and write `Drafts/voices.json` in one go:
+   `{"updated_at": "<ISO time>", "voices": [{"id": "<voice id>", "name": "<voice name>"}]}`. Write only id and name,
+   nothing else the API returns. Do not call any create tool. Tell the user how many voices were found; if there
+   are none, say that a voice is created at the URL from `voices-start` (the user does that on suno.com).

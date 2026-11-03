@@ -9,6 +9,15 @@ const HUMAN_EXT = ".human.json";
 const CLAUDE_EXT = ".claude.json";
 const LIMITS = { title: 200, style: 2000, lyrics: 20000, note: 1000 };
 const VOCALS = new Set(["", "male", "female"]);
+// How the song is made. Extend and mashup are added later; an unknown mode is rejected rather than guessed.
+const MODES = new Set(["new", "cover"]);
+const NEGATIVE_STYLE_MAX = 1000;
+const LABEL_MAX = 200;
+const VOICES_FILE = "voices.json";
+const VOICES_MAX = 200;
+// Suno ids end up in tool calls, so only a UUID (clip) or a plain token (voice) is accepted.
+const CLIP_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const VOICE_ID = /^[\w-]{1,100}$/;
 const DURATION_RANGE = [15, 360];
 
 export class ConflictError extends Error {}
@@ -39,13 +48,33 @@ function cleanSettings(settings = {}) {
   if (duration !== null && !(Number.isInteger(duration) && duration >= DURATION_RANGE[0] && duration <= DURATION_RANGE[1])) {
     throw new ValidationError(`duration must be an integer ${DURATION_RANGE[0]}-${DURATION_RANGE[1]}`);
   }
+  const mode = settings.mode ?? "new";
+  if (!MODES.has(mode)) throw new ValidationError(`mode must be one of: ${[...MODES].join(", ")}`);
+  const sourceId = settings.source_id ?? "";
+  if (sourceId !== "" && !CLIP_ID.test(sourceId)) throw new ValidationError("source_id must be a Suno song id");
+  // A cover without a source is a draft in progress: it saves, but the UI and rules refuse to generate it.
+  const voiceId = settings.voice_id ?? "";
+  if (voiceId !== "" && !VOICE_ID.test(voiceId)) throw new ValidationError("voice_id has invalid characters");
   return {
     vocal_gender: vocal,
     weirdness: fraction(settings.weirdness, "weirdness"),
     style_influence: fraction(settings.style_influence, "style_influence"),
+    audio_influence: fraction(settings.audio_influence, "audio_influence"),
     instrumental: settings.instrumental === true,
     duration,
+    mode,
+    source_id: sourceId,
+    source_title: label(settings.source_title, "source_title"),
+    voice_id: voiceId,
+    voice_name: label(settings.voice_name, "voice_name"),
+    negative_style: label(settings.negative_style, "negative_style", NEGATIVE_STYLE_MAX),
   };
+}
+
+function label(value, key, max = LABEL_MAX) {
+  const result = value ?? "";
+  if (typeof result !== "string" || result.length > max) throw new ValidationError(`${key} must be text up to ${max} characters`);
+  return result;
 }
 
 /** Validate a draft from either side. Throws ValidationError. */
@@ -126,4 +155,25 @@ export async function saveHuman(projectDir, name, data, baseMtime) {
   await writeFile(tmp, JSON.stringify(draft, null, 2) + "\n", "utf8");
   await rename(tmp, file);
   return (await stat(file)).mtimeMs;
+}
+
+/**
+ * The user's Suno voices, as cached by Claude in Drafts/voices.json after a voices-list call:
+ * {"updated_at": "...", "voices": [{"id": "", "name": ""}]}. The app cannot call Suno itself, so this file is the
+ * only source. Entries with a malformed id are dropped; a missing file means "not fetched yet".
+ */
+export async function readVoices(projectDir) {
+  let raw;
+  try {
+    raw = JSON.parse(await readFile(join(projectDir, "Drafts", VOICES_FILE), "utf8"));
+  } catch (err) {
+    if (err.code === "ENOENT") return { fetched: false, voices: [] };
+    return { fetched: false, voices: [], error: err.message };
+  }
+  const list = Array.isArray(raw?.voices) ? raw.voices : [];
+  const voices = list
+    .filter((v) => v && typeof v.id === "string" && VOICE_ID.test(v.id))
+    .slice(0, VOICES_MAX)
+    .map((v) => ({ id: v.id, name: typeof v.name === "string" ? v.name.slice(0, LABEL_MAX) : v.id }));
+  return { fetched: true, updatedAt: typeof raw.updated_at === "string" ? raw.updated_at.slice(0, 40) : null, voices };
 }
