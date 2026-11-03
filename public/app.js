@@ -278,7 +278,7 @@ async function refreshSongs() {
   const res = await fetch(`/api/songs?pj=${encodeURIComponent(viewing)}`);
   if (!res.ok) return;
   const songs = await res.json();
-  const key = viewing + JSON.stringify(songs.map((s) => [s.path ?? s.sunoId, s.mtime]));
+  const key = viewing + JSON.stringify(songs.map((s) => [s.path ?? s.sunoId, s.mtime, s.analysis?.mtime ?? s.analysis?.error, s.timings?.mtime ?? s.timings?.error]));
   if (key === songsKey) return;
   songsKey = key;
   if (!songs.length) {
@@ -302,6 +302,7 @@ function songCard(song) {
     head.append(badge);
   }
   if (!song.path && song.name) head.append(downloadButton(song));
+  if (song.sunoId) head.append(analyzeButton(song));
   if (song.detail.duration) {
     const dur = document.createElement("span");
     dur.className = "meta dur";
@@ -337,6 +338,51 @@ function downloadButton(song) {
   return button;
 }
 
+/** One-line, tagged request to analyse this song (beats, key, sections, word timings). Analysis spends no credit. */
+function analyzeButton(song) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "dl";
+  const done = song.analysis && !song.analysis.error && song.timings && !song.timings.error;
+  button.textContent = done ? "🔁 解析をやり直す" : "🎼 解析を頼む";
+  button.title = "ビート・キー・セクションと、歌詞の単語ごとのタイミングを Claude に取得して保存してもらいます(生成枠は使いません)";
+  button.addEventListener("click", async () => {
+    if (!claudeReady) {
+      return toast("Claude Code が見つかりません。左端の ⚙ 設定に導入方法があります。", { key: "an", kind: "error" });
+    }
+    // Downloaded songs are named by their file; a preview-only song by its .suno.json.
+    const name = song.name ?? song.title;
+    const text = `【解析】曲「${name}」(Output/song/${name}.suno.json)をビート解析と歌詞タイミングの取得で解析して、Output/song/${name}.analysis.json と Output/song/${name}.lyrics.json に保存してください。`;
+    try {
+      await typeToTerminal(text);
+      toast("ターミナルに解析の依頼を入力しました。内容を確認して、左の Enter キーで送信してください。", { key: "an" });
+    } catch (err) {
+      toast(`ターミナルに入力できませんでした: ${err.message}`, { key: "an", kind: "error" });
+    }
+  });
+  return button;
+}
+
+/** "解析" row text for the detail panel, or null when the song has not been analysed. */
+function analysisText(song) {
+  const parts = [];
+  const a = song.analysis;
+  if (a?.error) parts.push(`ビート解析ファイルを読めません: ${a.error}`);
+  else if (a) {
+    parts.push([
+      a.bpm !== null && `BPM ${a.bpm}`,
+      a.key,
+      a.timeSignature !== null && `${a.timeSignature}拍子`,
+      `${a.sections}セクション`,
+      `${a.beats}拍`,
+    ].filter(Boolean).join(" · "));
+  }
+  const t = song.timings;
+  if (t?.error) parts.push(`歌詞タイミングを読めません: ${t.error}`);
+  else if (t) parts.push(`歌詞タイミング ${t.words}語`);
+  return parts.length ? parts.join(" / ") : null;
+}
+
 function player(song) {
   if (song.path) {
     const audio = document.createElement("audio");
@@ -361,6 +407,7 @@ function detailsPanel(song) {
   const rows = [
     ["スタイル", d.style],
     ["作成", [created, d.kind].filter(Boolean).join(" · ") || null],
+    ["解析", analysisText(song)],
   ].filter(([, value]) => value);
   if (!rows.length && !d.settings.length && !d.lyrics && !song.sunoId) return null;
 

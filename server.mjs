@@ -7,6 +7,7 @@ import { createReadStream, readFileSync } from "node:fs";
 import { basename, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
+import { readAnalysisSummary, readTimingsSummary } from "./analysis.mjs";
 import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
 import { SessionLimitError, createSessions } from "./sessions.mjs";
 import { DOCS_URL, detectClaude, installCommands, installGuideText } from "./claude-cli.mjs";
@@ -259,12 +260,17 @@ async function listSongs(pj) {
   }
   // Once the mp3 is downloaded, the local player replaces the preview and keeps its details.
   const previewOf = new Map(previews.map((p) => [p.base, p]));
+  // Analysis files sit next to the song (same base path).
+  const analysed = new Map();
+  for (const base of [...local.map((s) => s.base), ...previews.map((p) => p.base)]) {
+    analysed.set(base, { analysis: await readAnalysisSummary(base), timings: await readTimingsSummary(base) });
+  }
   const ready = local.map(({ base, lyrics, ...rest }) => {
     const preview = previewOf.get(base);
     const detail = preview?.detail ?? { style: null, duration: null, kind: null, createdAt: null, settings: [], lyrics: null };
-    return { ...rest, sunoId: preview?.sunoId ?? null, cover: preview?.cover ?? null, detail: { ...detail, lyrics: lyrics ?? detail.lyrics } };
+    return { ...rest, sunoId: preview?.sunoId ?? null, cover: preview?.cover ?? null, ...analysed.get(base), detail: { ...detail, lyrics: lyrics ?? detail.lyrics } };
   });
-  const pending = previews.filter((p) => !downloaded.has(p.base)).map(({ base, ...rest }) => ({ ...rest, name: basename(base) }));
+  const pending = previews.filter((p) => !downloaded.has(p.base)).map(({ base, ...rest }) => ({ ...rest, name: basename(base), ...analysed.get(base) }));
   return [...ready, ...pending].sort((a, b) => b.mtime - a.mtime);
 }
 

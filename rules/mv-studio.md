@@ -40,7 +40,7 @@ Each draft has two files in `Drafts/`, each with exactly ONE owner:
 
 ## Requests typed by the app's buttons
 
-The app types one of these requests, each starting with a tag (1-3 and 5 from the draft tab, 4 from a song card). Follow the matching procedure.
+The app types one of these requests, each starting with a tag (1-3 and 5 from the draft tab, 4 and 6 from a song card). Follow the matching procedure.
 
 1. `【確認】` — review a draft.
    Read `Drafts/<name>.human.json`. If the lyrics are EMPTY (the user gave only a title, style or settings), write an original first draft (a "素案") from them for the user to react to, and say so in the `note`. Otherwise complete the lyrics: keep the user's ideas and wording where they work, give it a
@@ -84,3 +84,17 @@ empty; if they are, ask instead of generating.
    `{"updated_at": "<ISO time>", "voices": [{"id": "<voice id>", "name": "<voice name>"}]}`. Write only id and name,
    nothing else the API returns. Do not call any create tool. Tell the user how many voices were found; if there
    are none, say that a voice is created at the URL from `voices-start` (the user does that on suno.com).
+6. `【解析】` — analyse ONE song (typed by a song card's button).
+   The request names the song. Take its clip id from `Output/song/<name>.suno.json` (field `id`). Analysis spends no
+   credit (measured), but never call a create tool here.
+   - Beats: call `audio-analysis`. While `status` is `processing`, call it again (at most 6 calls in all); stop on
+     `unavailable`. Save `Output/song/<name>.analysis.json` in one go:
+     `{"id": "<clip id>", "bpm": 0, "key": "", "time_signature": 4, "duration_s": 0, "sections": [{"start_s": 0,
+     "end_s": 0, "label": "A"}], "beats": [[<time_s>, <bar_position>], ...], "terms": [], "labels": [{"label": "",
+     "probability": 0}]}`. Copy every beat exactly as returned (times rounded to 3 decimals); do not thin, summarise
+     or invent beats. A part Suno could not produce stays `null` / `[]`.
+   - Words: call `audio-lyrics-alignment` the same way (skip for an instrumental). Save
+     `Output/song/<name>.lyrics.json` as `{"id": "<clip id>", "words": [ ...one object per word, exactly the
+     fields the API returns for it (text and start/end seconds)... ]}`.
+   - The responses are long. NEVER paste beats or words into the chat; answer with one line: BPM, key, number of
+     sections and beats, number of words, and which part (if any) was unavailable. Do not retry beyond the polling above.
