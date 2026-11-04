@@ -1,4 +1,4 @@
-// The "Video tools" section of the settings panel: the curated list of skills, plugins and tools for making videos, with
+// The "Library" panel (🧩 in the left rail): the curated list of skills, plugins and tools for making videos, with
 // what is installed in the chosen project and a button that installs one. Every install shows the exact commands first,
 // runs on the server (only the catalog's own checked commands), streams its log here and can be cancelled.
 // The list is one line per entry (name, state, a small button); the explanation opens only when a row is clicked.
@@ -11,6 +11,21 @@ const KIND_LABELS = { skills: "スキル", plugin: "プラグイン", mcp: "MCP"
 const STATE_LABELS = { installed: "導入済み", partial: "一部のみ", "not-installed": "未導入", unknown: "不明", builtin: "内蔵", manual: "手動" };
 const COST_LABELS = { none: null, "account-required": "アカウントが必要", "paid-accounts": "料金がかかります" };
 const COMMAND_KINDS = new Set(["skills", "plugin", "mcp"]);
+const CATEGORY_FILTERS = [
+  ["all", "すべて"],
+  ["render", "描画"],
+  ["music-video", "MV"],
+  ["animation", "アニメ"],
+  ["generation", "生成"],
+  ["captions", "字幕"],
+  ["editing", "編集"],
+  ["audio", "音声"],
+];
+const STATE_FILTERS = [
+  ["all", "すべて"],
+  ["installed", "導入済み"],
+  ["not-installed", "未導入"],
+];
 // What to do after an install so that a Claude that is already running notices it.
 const AFTER_INSTALL = {
   skills: "動いている Claude には、まもなく自動で反映されます。されないときは、その Claude で /reload-skills と入力してください。",
@@ -45,9 +60,54 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
   let install = null;       // the running or last install
   let confirming = null;    // { id, scope, plan }
   const open = new Set();   // entries whose explanation is shown
+  let query = "";
+  let category = "all";
+  let stateFilter = "all";
   let timer = null;
   let destroyed = false;
   let shownKey = null;
+
+  const listBox = h("div", { className: "vt-entries" });
+  const searchInput = h("input", {
+    type: "search",
+    className: "vt-search",
+    placeholder: "名前・説明で絞り込み",
+    ariaLabel: "名前・説明で絞り込み",
+    oninput: () => { query = searchInput.value; renderList(); },
+  });
+  const catButtons = new Map();
+  const stateButtons = new Map();
+  const catRow = h("div", { className: "chips vt-chips", role: "group", ariaLabel: "用途で絞り込み" },
+    ...CATEGORY_FILTERS.map(([id, label]) => {
+      const btn = h("button", {
+        type: "button",
+        className: "chip vt-chip",
+        textContent: label,
+        onclick: () => { category = category === id && id !== "all" ? "all" : id; updateChips(); renderList(); },
+      });
+      catButtons.set(id, btn);
+      return btn;
+    }),
+  );
+  const stateRow = h("div", { className: "chips vt-chips", role: "group", ariaLabel: "状態で絞り込み" },
+    ...STATE_FILTERS.map(([id, label]) => {
+      const btn = h("button", {
+        type: "button",
+        className: "chip vt-chip",
+        textContent: label,
+        onclick: () => { stateFilter = stateFilter === id && id !== "all" ? "all" : id; updateChips(); renderList(); },
+      });
+      stateButtons.set(id, btn);
+      return btn;
+    }),
+  );
+  const filterBar = h("div", { className: "vt-filters" }, searchInput, catRow, stateRow);
+
+  function updateChips() {
+    for (const [id, btn] of catButtons) btn.classList.toggle("on", id === category);
+    for (const [id, btn] of stateButtons) btn.classList.toggle("on", id === stateFilter);
+  }
+  updateChips();
 
   async function load() {
     try {
@@ -186,6 +246,32 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     setSummary(`導入済み ${done} / ${installable.length}`, "neutral");
   }
 
+  function matchesFilter(entry) {
+    if (category !== "all" && !entry.category?.includes(category)) return false;
+    const isInstalled = entry.installed.state === "installed" || entry.installed.state === "builtin";
+    if (stateFilter === "installed" && !isInstalled) return false;
+    if (stateFilter === "not-installed" && isInstalled) return false;
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    const hay = [entry.name, entry.id, entry.summary_ja, entry.use_when_ja].filter(Boolean).join("\n").toLowerCase();
+    return hay.includes(q);
+  }
+
+  function renderList() {
+    if (!catalog?.available) return;
+    const filtered = catalog.entries.filter(matchesFilter);
+    if (!filtered.length) {
+      listBox.replaceChildren(h("p", { className: "sec-note", textContent: "該当するツールがありません。" }));
+      return;
+    }
+    listBox.replaceChildren(
+      ...GROUPS.flatMap(([title, test]) => {
+        const entries = filtered.filter(test);
+        return entries.length ? [h("h5", { className: "vt-group", textContent: title }), ...entries.map(row)] : [];
+      }),
+    );
+  }
+
   function render(force = false) {
     if (destroyed) return;
     const key = JSON.stringify([catalog, install, confirming, pj, projects, [...open]]);
@@ -198,14 +284,20 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     if (confirming) return box.replaceChildren(confirmView());
     const chooser = h("select", { title: "導入先のプロジェクト" }, ...projects.map((name) => h("option", { value: name, selected: name === pj, textContent: name })));
     chooser.addEventListener("change", async () => { pj = chooser.value; catalog = await get(`/api/video-tools?pj=${encodeURIComponent(pj)}`); render(true); });
+    const installable = catalog.entries.filter((e) => COMMAND_KINDS.has(e.kind));
+    const done = installable.filter((e) => e.installed.state === "installed").length;
     const result = resultView();
+    updateChips();
+    renderList();
     box.replaceChildren(
-      h("div", { className: "vt-target" }, h("span", { className: "sec-note", textContent: "導入先" }), projects.length ? chooser : h("span", { className: "sec-note", textContent: "プロジェクトを作ると導入できます" })),
+      h("div", { className: "vt-target" },
+        h("span", { className: "sec-note", textContent: "導入先" }),
+        projects.length ? chooser : h("span", { className: "sec-note", textContent: "プロジェクトを作ると導入できます" }),
+        h("span", { className: "sec-sum", textContent: `導入済み ${done} / ${installable.length}` }),
+      ),
       ...(result ? [result] : []),
-      ...GROUPS.flatMap(([title, test]) => {
-        const entries = catalog.entries.filter(test);
-        return entries.length ? [h("h5", { className: "vt-group", textContent: title }), ...entries.map(row)] : [];
-      }),
+      filterBar,
+      listBox,
     );
   }
 

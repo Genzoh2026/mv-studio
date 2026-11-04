@@ -6,6 +6,7 @@ import { createJobBar } from "/job-bar.js";
 import { toast } from "/toast.js";
 import { createRail } from "/rail.js";
 import { settingsTool } from "/settings.js";
+import { libraryTool } from "/library.js";
 import { trashTool } from "/trash.js";
 import { powerTool } from "/power.js";
 
@@ -105,7 +106,7 @@ createRail({
   rail: $("rail"),
   panel: $("rail-panel"),
   handle: $("rail-handle"),
-  tools: [settingsTool, trashTool, powerTool],
+  tools: [settingsTool, libraryTool, trashTool, powerTool],
   onLayout: () => fit.fit(),
 });
 

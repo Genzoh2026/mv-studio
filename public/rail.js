@@ -1,11 +1,11 @@
 // The slim tool bar on the far left. Each tool is one icon that opens a panel beside the bar; the bar itself can be
 // folded away (a small handle stays at the edge). To add a tool, add an entry to `tools` in app.js:
-//   { id, icon, title, position?: "bottom", open(body): (() => void) | void }   // open() fills `body`; its return value is a cleanup
+//   { id, icon, title, wide?: boolean, position?: "bottom", open(body): (() => void) | void }   // open() fills `body`; its return value is a cleanup
 // `position: "bottom"` puts the button at the foot of the bar, away from the others (used for the power tool).
 const STORAGE_KEY = "mv-studio:rail-collapsed";
 
 /**
- * @param {{rail: HTMLElement, panel: HTMLElement, handle: HTMLElement, tools: Array<{id: string, icon: string, title: string, open: (body: HTMLElement) => (() => void) | void}>, onLayout: () => void}} options
+ * @param {{rail: HTMLElement, panel: HTMLElement, handle: HTMLElement, tools: Array<{id: string, icon: string, title: string, wide?: boolean, open: (body: HTMLElement) => (() => void) | void}>, onLayout: () => void}} options
  *   onLayout runs after the bar is folded or unfolded, so the terminal can refit.
  */
 export function createRail({ rail, panel, handle, tools, onLayout }) {
@@ -20,6 +20,7 @@ export function createRail({ rail, panel, handle, tools, onLayout }) {
     cleanup = null;
     openId = null;
     panel.hidden = true;
+    panel.classList.remove("wide");
     for (const button of buttons.values()) button.classList.remove("on");
   }
 
@@ -28,6 +29,7 @@ export function createRail({ rail, panel, handle, tools, onLayout }) {
     openId = tool.id;
     heading.textContent = tool.title;
     body.replaceChildren();
+    panel.classList.toggle("wide", Boolean(tool.wide));
     cleanup = tool.open(body) ?? null;
     panel.hidden = false;
     buttons.get(tool.id).classList.add("on");

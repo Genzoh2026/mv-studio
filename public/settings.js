@@ -1,8 +1,7 @@
-// The settings tool: Claude Code, the audio tools and the video tools, each a collapsible section with a one-line status.
-// (Restarting and stopping the server is the separate power tool, power.js.)
+// The settings tool: Claude Code and the audio tools, each a collapsible section with a one-line status.
+// (The video tools catalog is the separate library tool, library.js; restarting and stopping the server is power.js.)
 import { toast } from "/toast.js";
 import { createAudioToolsPanel } from "/audio-tools-panel.js";
-import { createVideoToolsPanel } from "/video-tools-panel.js";
 
 const REFRESH_MS = 5000;
 const SECTIONS_KEY = "mv-studio:settings-sections";
@@ -50,9 +49,8 @@ export const settingsTool = {
   open(body) {
     const claudeSection = makeSection("claude", "Claude Code");
     const audioSection = makeSection("audio", "音声ツール", "audio-tools-heading");
-    const videoSection = makeSection("video", "動画ツール", "video-tools-heading");
     const claudeBox = claudeSection.box;
-    body.append(claudeSection.el, audioSection.el, videoSection.el);
+    body.append(claudeSection.el, audioSection.el);
 
     let status = null;
 
@@ -109,13 +107,12 @@ export const settingsTool = {
       if (status) document.dispatchEvent(new CustomEvent("claude-status", { detail: status.claude }));
     }
 
-    // The audio tools (separation, beat analysis) and the video tools have their own modules.
+    // The audio tools (separation, beat analysis) have their own module.
     const audioPanel = createAudioToolsPanel(audioSection.box, audioSection);
-    const videoPanel = createVideoToolsPanel(videoSection.box, videoSection);
 
     renderClaude();
     load();
     const timer = setInterval(load, REFRESH_MS);
-    return () => { clearInterval(timer); audioPanel.destroy(); videoPanel.destroy(); };
+    return () => { clearInterval(timer); audioPanel.destroy(); };
   },
 };

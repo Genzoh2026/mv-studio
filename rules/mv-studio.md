@@ -34,7 +34,7 @@ songs on the right. The current directory is ONE MV project. These rules are sup
   - Use what is installed. Prefer entries with `status: recommended`. If something you need is not installed, tell the user in a
     few lines: the name and maker, what it does, what it needs, any cost or sign-in, the license caveats in `notes_ja`, and the
     exact commands. Then wait for a clear yes before running anything. One yes covers that entry only.
-  - The easiest way for the user is the button in the app: left bar ⚙ Settings > 動画ツール, "導入する" next to the entry (it shows the
+  - The easiest way for the user is the button in the app: left bar 🧩 ライブラリ, "導入" next to the entry (it shows the
     exact commands and asks before running them; the user can also choose all projects there). Tell them which entry to press. Run the
     commands yourself only if the user asks you to ("あなたが入れて"): then run them exactly as written, one at a time, with the shell
     tool, from this project folder (they are all project scope). Never add `-g`, `--scope user`, `--all` or `sudo`, never pipe or
