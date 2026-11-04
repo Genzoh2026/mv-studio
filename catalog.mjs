@@ -3,7 +3,7 @@
 // list only if it has one of a few exact forms: project scope, no piping, no chaining, nothing that touches the whole computer.
 import { access, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 export const KINDS = ["skills", "plugin", "mcp", "connector", "builtin", "system"];
 export const STATUSES = ["recommended", "optional", "installed-by-app"];
@@ -111,6 +111,13 @@ export async function loadCatalog(path) {
 
 const exists = (path) => access(path).then(() => true, () => false);
 
+/** Same folder, whatever the spelling (case on Windows, trailing separators, relative parts). */
+const samePath = (a, b) => {
+  const norm = (p) => resolve(p).replace(/[\\/]+$/, "");
+  return process.platform === "win32" ? norm(a).toLowerCase() === norm(b).toLowerCase() : norm(a) === norm(b);
+};
+const PROJECT_BOUND = new Set(["project", "local"]);
+
 /**
  * Whether an entry is installed for a project, as far as it can be told without asking the services.
  * @param {object} entry
@@ -123,8 +130,12 @@ export async function installState(entry, { pjDir, home = homedir(), plugins }) 
   if (MANUAL_KINDS.has(entry.kind)) return { state: "manual" };
   if (entry.kind === "plugin") {
     if (!plugins) return { state: "unknown", detail: "claude plugin list could not be read" };
-    const found = plugins.find((plugin) => plugin.id === entry.provides.plugin);
-    return found ? { state: found.enabled === false ? "partial" : "installed", detail: `${found.scope ?? "?"} scope${found.enabled === false ? ", disabled" : ""}` } : { state: "not-installed" };
+    const sameId = plugins.filter((plugin) => plugin.id === entry.provides.plugin);
+    // A project-scope install belongs to the project it was made in (projectPath); in any other project it is not installed,
+    // and `claude plugin list` reports it there as disabled, which must not read as "partly installed".
+    const here = sameId.find((plugin) => !PROJECT_BOUND.has(plugin.scope) || !plugin.projectPath || samePath(plugin.projectPath, pjDir));
+    if (here) return { state: here.enabled === false ? "partial" : "installed", detail: `${here.scope ?? "?"} scope${here.enabled === false ? ", disabled" : ""}` };
+    return sameId.length ? { state: "not-installed", detail: `installed in another project: ${basename(sameId[0].projectPath ?? "")}` } : { state: "not-installed" };
   }
   if (entry.kind === "mcp") {
     try {

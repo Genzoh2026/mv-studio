@@ -138,3 +138,23 @@ test("describeCatalog adds the install state, hides the evidence list, and filte
     assert.equal(only.watchlist, undefined);
   });
 });
+
+test("a project-scope plugin counts only in the project it was installed in; user scope counts everywhere", async () => {
+  const plugin = entry({ kind: "plugin", provides: { plugin: "hyper@hyper" }, install: { commands: ["claude plugin install hyper@hyper --scope project"] } });
+  await scratch(async ({ pjDir, home }) => {
+    const other = join(pjDir, "..", "other-pj");
+    // listed from here, the install made in another project shows up disabled: that is "not installed here", not "partly"
+    const elsewhere = [{ id: "hyper@hyper", scope: "project", enabled: false, projectPath: other }];
+    assert.deepEqual(await installState(plugin, { pjDir, home, plugins: elsewhere }), { state: "not-installed", detail: "installed in another project: other-pj" });
+    const here = [{ id: "hyper@hyper", scope: "project", enabled: true, projectPath: pjDir }];
+    assert.deepEqual(await installState(plugin, { pjDir, home, plugins: here }), { state: "installed", detail: "project scope" });
+    // the same folder written differently (trailing separator, mixed case on Windows) is still the same project
+    const respelled = [{ id: "hyper@hyper", scope: "project", enabled: true, projectPath: `${process.platform === "win32" ? pjDir.toUpperCase() : pjDir}/` }];
+    assert.equal((await installState(plugin, { pjDir, home, plugins: respelled })).state, "installed");
+    // installed here and also in another project: the one here wins
+    assert.equal((await installState(plugin, { pjDir, home, plugins: [...elsewhere, ...here] })).state, "installed");
+    // user scope applies to every project; a disabled one is only partly there
+    assert.equal((await installState(plugin, { pjDir, home, plugins: [{ id: "hyper@hyper", scope: "user", enabled: true }] })).state, "installed");
+    assert.equal((await installState(plugin, { pjDir, home, plugins: [{ id: "hyper@hyper", scope: "user", enabled: false }] })).state, "partial");
+  });
+});
