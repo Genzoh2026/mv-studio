@@ -4,6 +4,35 @@ import { createAudioToolsPanel } from "/audio-tools-panel.js";
 import { createVideoToolsPanel } from "/video-tools-panel.js";
 
 const REFRESH_MS = 5000;
+const SECTIONS_KEY = "mv-studio:settings-sections";
+
+/**
+ * A collapsible section with a one-line status in its header. Whether it is open is remembered; a section that needs attention
+ * opens by itself the first time (only if the user never chose).
+ */
+function makeSection(id, title, headingId) {
+  const saved = () => { try { return JSON.parse(localStorage.getItem(SECTIONS_KEY) ?? "{}"); } catch { return {}; } };
+  const el = h("details", { className: "sec" });
+  const label = h("span", { className: "sec-title", textContent: title, id: headingId });
+  const summaryText = h("span", { className: "sec-sum" });
+  const box = h("div", { className: "sec-body" });
+  el.append(h("summary", {}, label, summaryText), box);
+  if (saved()[id] !== undefined) el.open = saved()[id];
+  let programmatic = false;
+  el.addEventListener("toggle", () => {
+    if (programmatic) return;
+    localStorage.setItem(SECTIONS_KEY, JSON.stringify({ ...saved(), [id]: el.open }));
+  });
+  return {
+    el, box,
+    setSummary(text, level = "neutral") {
+      summaryText.textContent = text;
+      summaryText.dataset.level = level;
+      // Needs attention and the user never chose: show it, without recording that as a choice.
+      if (saved()[id] === undefined && (level === "warn" || level === "bad") && !el.open) { programmatic = true; el.open = true; queueMicrotask(() => { programmatic = false; }); }
+    },
+  };
+}
 const RESTART_POLL_MS = 1000;
 const RESTART_TIMEOUT_MS = 60_000;
 
@@ -30,11 +59,14 @@ export const settingsTool = {
   open(body) {
     const rows = h("dl", { className: "info" });
     const actions = h("div", { className: "panel-actions" });
-    const note = h("p", { className: "meta" });
-    const claudeBox = h("div", { className: "claude-box" });
-    const audioBox = h("div", { className: "claude-box" });
-    const videoBox = h("div", { className: "claude-box" });
-    body.append(h("h4", { textContent: "Claude Code" }), claudeBox, h("h4", { textContent: "音声ツール(曲の分離・ビート解析)", id: "audio-tools-heading" }), audioBox, h("h4", { textContent: "動画ツール(スキル・プラグイン)", id: "video-tools-heading" }), videoBox, h("h4", { textContent: "サーバー" }), rows, actions, note);
+    const note = h("p", { className: "sec-note" });
+    const claudeSection = makeSection("claude", "Claude Code");
+    const audioSection = makeSection("audio", "音声ツール", "audio-tools-heading");
+    const videoSection = makeSection("video", "動画ツール", "video-tools-heading");
+    const serverSection = makeSection("server", "サーバー");
+    const claudeBox = claudeSection.box;
+    serverSection.box.append(rows, actions, note);
+    body.append(claudeSection.el, audioSection.el, videoSection.el, serverSection.el);
 
     let status = null;
     let confirming = null; // "restart" | "stop" | null
@@ -61,12 +93,12 @@ export const settingsTool = {
     /** Install help is shown only while the CLI is missing; the commands come from the server (official docs). */
     function renderClaude() {
       const claude = status?.claude;
+      claudeSection.setSummary(!claude ? "確認中…" : claude.found ? `✓ ${claude.version.split(" ")[0]}` : "✗ 見つかりません", !claude ? "neutral" : claude.found ? "ok" : "bad");
       const recheckBtn = h("button", { type: "button", textContent: "再確認", onclick: recheck });
       if (!claude) return claudeBox.replaceChildren(h("p", { className: "meta", textContent: "確認中…" }));
       if (claude.found) {
         return claudeBox.replaceChildren(
-          h("p", { className: "ok", textContent: `検出済み: ${claude.version}` }),
-          h("p", { className: "meta", textContent: claude.where }),
+          h("p", { className: "sec-note", textContent: `${claude.version} · ${claude.where}` }),
           recheckBtn,
         );
       }
@@ -95,6 +127,7 @@ export const settingsTool = {
         ]
         : [["状態", "読み込み中…"]];
       rows.replaceChildren(...entries.flatMap(([k, v]) => [h("dt", { textContent: k }), h("dd", { textContent: v })]));
+      serverSection.setSummary(s ? `稼働 ${formatUptime(s.startedAt)} · :${s.port}${s.sessions.length ? ` · Claude ${s.sessions.length}` : ""}` : "確認中…", "neutral");
     }
 
     function renderActions() {
@@ -168,8 +201,8 @@ export const settingsTool = {
     }
 
     // The audio tools (separation, beat analysis) have their own module: status plus a one-button setup.
-    const audioPanel = createAudioToolsPanel(audioBox);
-    const videoPanel = createVideoToolsPanel(videoBox);
+    const audioPanel = createAudioToolsPanel(audioSection.box, audioSection);
+    const videoPanel = createVideoToolsPanel(videoSection.box, videoSection);
 
     renderInfo();
     renderClaude();

@@ -13,7 +13,11 @@ const tookText = (job) => (job.startedAt && job.finishedAt ? `(${((job.finishedA
 const openSettings = () => {
   const rail = document.querySelector(".rail-btn");
   if (rail && !rail.classList.contains("on")) rail.click();
-  setTimeout(() => document.getElementById("audio-tools-heading")?.scrollIntoView({ block: "start" }), 200);
+  setTimeout(() => {
+    const heading = document.getElementById("audio-tools-heading");
+    heading?.closest("details")?.setAttribute("open", ""); // the section may be folded
+    heading?.scrollIntoView({ block: "start" });
+  }, 200);
 };
 
 const h = (tag, props = {}, ...children) => {

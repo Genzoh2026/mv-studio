@@ -1,10 +1,11 @@
-// The "Audio tools" part of the settings panel: what this computer has for separating songs and finding beats, and a
+// The "Audio tools" section of the settings panel: what this computer has for separating songs and finding beats, and a
 // one-button setup for what is missing. The setup is shown and confirmed first, runs on the server inside the workspace's
 // own Python environment (no other Python is touched), streams its log here, and can be cancelled.
+// The calm state is one line of chips and a sentence; everything else (commands, Python path, model) is folded away.
 import { toast } from "/toast.js";
 
 const POLL_MS = 1000;
-const SHOWN_LOG_LINES = 14;
+const SHOWN_LOG_LINES = 8;
 const DOWNLOAD_CPU = "約 0.7 GB";
 const DOWNLOAD_GPU = "+ 約 3 GB";
 const STEP_ICON = { waiting: "○", running: "⏳", done: "✓", error: "✗", cancelled: "—" };
@@ -18,13 +19,16 @@ const h = (tag, props = {}, ...children) => {
 const post = (path, payload = {}) => fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
 const get = async (path) => { const res = await fetch(path, { cache: "no-store" }); return res.ok ? res.json() : null; };
 
-/** @param {HTMLElement} box where the panel is drawn */
-export function createAudioToolsPanel(box) {
+/**
+ * @param {HTMLElement} box where the section body is drawn
+ * @param {{setSummary: (text: string, level?: "ok"|"warn"|"bad"|"neutral") => void}} section the header's one-line status
+ */
+export function createAudioToolsPanel(box, { setSummary = () => {} } = {}) {
   let audio = null;      // /api/audio-tools
   let install = null;    // /api/audio-install (the running or last setup)
   let plan = null;       // /api/audio-install/plan while the confirmation is open
   let confirming = false;
-  let wantGpu = true;
+  let wantGpu = false;
   let shownKey = null;
   let timer = null;
   let destroyed = false;
@@ -58,7 +62,7 @@ export function createAudioToolsPanel(box) {
 
   function announce() {
     if (install.state === "done") toast(audio?.ready.separate ? "導入できました。分離とビート解析が使えます" : "導入は終わりました。まだ足りないものがあります", { key: "audio-setup", kind: audio?.ready.separate ? "info" : "warn" });
-    else if (install.state === "error") toast("導入に失敗しました。下のログを確認してください", { key: "audio-setup", kind: "error" });
+    else if (install.state === "error") toast("導入に失敗しました。ログを確認してください", { key: "audio-setup", kind: "error" });
   }
 
   async function openConfirm(gpu) {
@@ -111,28 +115,28 @@ export function createAudioToolsPanel(box) {
 
   const copyButton = (text) => h("button", { type: "button", textContent: "コピー", onclick: async () => { await navigator.clipboard.writeText(text); toast("コピーしました", { key: "copied" }); } });
   const button = (textContent, onclick, className = "") => h("button", { type: "button", textContent, onclick, className });
-  const mark = (ok, text) => h("p", { className: ok ? "ok" : "bad", textContent: `${ok ? "✓" : "✗"} ${text}` });
+  const chip = (state, text, title) => h("span", { className: `chip ${state}`, textContent: text, title });
 
-  function statusView() {
-    return [
-      mark(audio.python.found, audio.python.found ? `Python ${audio.python.version}(${audio.python.where})` : "Python が見つかりません"),
-      mark(Boolean(audio.numpy), audio.numpy ? `numpy ${audio.numpy}(ビート解析)` : "numpy がありません(ビート解析に必要)"),
-      mark(Boolean(audio.demucs) && !audio.demucsError, !audio.demucs ? "Demucs がありません(曲の分離に必要)" : audio.demucsError ? `Demucs ${audio.demucs} は入っていますが、動きません: ${audio.demucsError}` : `Demucs ${audio.demucs}(曲の分離)`),
-      mark(audio.ffmpeg.found, audio.ffmpeg.found ? `ffmpeg ${audio.ffmpeg.version}` : "ffmpeg が見つかりません"),
-      ...(!audio.demucs || audio.demucsError ? [] : [h("p", { className: audio.gpu ? "bad" : "meta", textContent: audio.cuda
-        ? `GPU で分離します(PyTorch ${audio.torch ?? ""} / CUDA)。`
-        : audio.gpu
-          ? `NVIDIA GPU(${audio.gpu})がありますが、この環境の PyTorch は GPU 非対応の版です。CPU でも動きます。GPU 版に入れ替えると速くなります(任意)。`
-          : "GPU は使っていません(CPU で動きます。曲 1 分で数十秒〜数分)。" })]),
-    ];
+  /** One row of chips instead of five paragraphs. The hover text carries the versions and the reason. */
+  function chips() {
+    const demucsOk = Boolean(audio.demucs) && !audio.demucsError;
+    return h("div", { className: "chips" },
+      chip(audio.python.found ? "ok" : "bad", `${audio.python.found ? "✓" : "✗"} Python`, audio.python.found ? `Python ${audio.python.version}\n${audio.python.where}` : "Python が見つかりません"),
+      chip(audio.numpy ? "ok" : "bad", `${audio.numpy ? "✓" : "✗"} numpy`, audio.numpy ? `numpy ${audio.numpy}(ビート解析)` : "numpy がありません(ビート解析に必要)"),
+      chip(demucsOk ? "ok" : "bad", `${demucsOk ? "✓" : "✗"} Demucs`, !audio.demucs ? "Demucs がありません(曲の分離に必要)" : audio.demucsError ? `入っていますが、動きません: ${audio.demucsError}` : `Demucs ${audio.demucs}(曲の分離)`),
+      chip(audio.ffmpeg.found ? "ok" : "bad", `${audio.ffmpeg.found ? "✓" : "✗"} ffmpeg`, audio.ffmpeg.found ? `ffmpeg ${audio.ffmpeg.version}` : "ffmpeg が見つかりません"),
+      // The GPU chip describes separation, so it only means something once Demucs works (another Python may have a GPU build).
+      ...(!demucsOk ? [] : [audio.cuda ? chip("ok", "✓ GPU", `PyTorch ${audio.torch ?? ""} / CUDA で分離します`)
+        : audio.gpu ? chip("warn", "GPU 未使用", `NVIDIA GPU(${audio.gpu})がありますが、PyTorch が GPU 非対応の版です。CPU で動きます`)
+          : chip("neutral", "CPU", "GPU は使いません(曲 1 分で数十秒〜数分)")]),
+    );
   }
 
   /** Steps only the user can do (they install software for the whole computer). */
   function systemSteps() {
     return audio.install.filter((step) => step.kind === "system").flatMap((step) => [
-      h("p", { className: "meta", textContent: step.label }),
+      h("p", { className: "sec-note", textContent: step.label }),
       h("div", { className: "cmd" }, h("pre", { textContent: step.command }), copyButton(step.command)),
-      ...(step.note ? [h("p", { className: "meta", textContent: step.note })] : []),
     ]);
   }
 
@@ -140,37 +144,32 @@ export function createAudioToolsPanel(box) {
     const log = h("pre", { className: "setup-log", textContent: install.log.slice(-SHOWN_LOG_LINES).join("\n") });
     queueMicrotask(() => { log.scrollTop = log.scrollHeight; });
     return [
-      h("p", { textContent: "導入しています…(この画面を閉じても続きます)" }),
-      ...install.steps.map((step) => h("p", { className: step.state === "error" ? "bad" : "meta", textContent: `${STEP_ICON[step.state]} ${step.label}` })),
+      h("p", { textContent: "導入しています…(画面を閉じても続きます)" }),
+      ...install.steps.map((step) => h("p", { className: step.state === "error" ? "bad" : "sec-note", textContent: `${STEP_ICON[step.state]} ${step.label}` })),
       log,
       button("取り消し", async () => { await post("/api/audio-install/cancel"); await load(); }),
     ];
   }
 
   function confirmView() {
-    if (!plan) return [h("p", { className: "meta", textContent: "確認中…" })];
+    if (!plan) return [h("p", { className: "sec-note", textContent: "確認中…" })];
     if (!plan.ok) return [h("p", { className: "bad", textContent: plan.reason }), ...systemSteps(), button("閉じる", () => { confirming = false; render(); })];
-    const gpuChoice = plan.gpuAvailable
-      ? [h("label", { className: "setup-gpu" },
-        Object.assign(h("input", { type: "checkbox" }), { checked: wantGpu, onchange: (event) => openConfirm(event.target.checked) }),
-        ` GPU 版の PyTorch を使う(${plan.gpuName}。${DOWNLOAD_GPU}。分離が速くなります)`)]
-      : [];
     return [
-      h("p", { textContent: `次を実行します。変更するのは、この専用環境の中だけです(他の Python には触れません):` }),
-      h("p", { className: "meta", textContent: plan.venvDir }),
+      h("p", { textContent: "専用環境に、次を入れます(他の Python には触れません)。" }),
+      h("p", { className: "sec-note", textContent: plan.venvDir }),
       ...(plan.warning ? [h("p", { className: "bad", textContent: plan.warning })] : []),
-      ...plan.steps.flatMap((step) => [h("p", { className: "meta", textContent: `・${step.label}` }), h("pre", { className: "setup-cmd", textContent: step.display })]),
-      h("p", { className: "meta", textContent: `ダウンロード: ${DOWNLOAD_CPU}${plan.gpuStep ? ` ${DOWNLOAD_GPU}` : ""}(インターネットに接続します。数分〜十数分かかります)` }),
-      ...gpuChoice,
+      ...plan.steps.map((step) => h("pre", { className: "setup-cmd", textContent: step.display })),
+      h("p", { className: "sec-note", textContent: `ダウンロード ${DOWNLOAD_CPU}${plan.gpuStep ? ` ${DOWNLOAD_GPU}` : ""} · 数分〜十数分` }),
+      ...(plan.gpuAvailable ? [h("label", { className: "setup-gpu" }, Object.assign(h("input", { type: "checkbox" }), { checked: wantGpu, onchange: (event) => openConfirm(event.target.checked) }), ` GPU 版を使う(${plan.gpuName}。${DOWNLOAD_GPU})`)] : []),
       h("div", { className: "panel-actions" }, button("導入する", start, "danger"), button("やめる", () => { confirming = false; render(); })),
     ];
   }
 
   function resultView() {
     if (!install || install.state === "idle" || install.state === "running") return [];
-    const log = h("details", {}, h("summary", { textContent: "ログ" }), h("pre", { className: "setup-log", textContent: install.log.slice(-SHOWN_LOG_LINES).join("\n") }));
+    const log = h("details", { className: "sec-more" }, h("summary", { textContent: "ログ" }), h("pre", { className: "setup-log", textContent: install.log.slice(-SHOWN_LOG_LINES).join("\n") }));
     if (install.state === "error") return [h("p", { className: "bad", textContent: `導入に失敗しました: ${install.error}` }), log];
-    if (install.state === "cancelled") return [h("p", { className: "meta", textContent: "導入を取り消しました。もう一度押すと、途中から続けます。" })];
+    if (install.state === "cancelled") return [h("p", { className: "sec-note", textContent: "導入を取り消しました。もう一度押すと、途中から続けます。" })];
     return [];
   }
 
@@ -179,9 +178,7 @@ export function createAudioToolsPanel(box) {
     if (confirming) return confirmView();
     const view = [...resultView()];
     if (!audio.ready.separate) {
-      const label = audio.demucsError ? "音声ツールを直す(ワンボタン)" : "音声ツールを導入する(ワンボタン)";
-      view.push(h("p", { className: "meta", textContent: "必要なものを、アプリが自動で入れます(専用環境の中だけ。実行前に内容を確認できます)。" }), button(label, () => openConfirm(false), "primary"));
-      view.push(...systemSteps());
+      view.push(button(audio.demucsError ? "音声ツールを直す" : "音声ツールを導入する", () => openConfirm(false), "primary"), ...systemSteps());
     } else {
       view.push(h("p", { className: "ok", textContent: "✓ 分離とビート解析が使えます" }));
       // Swapping to the GPU build is only offered for the app's own environment: no other Python is ever changed.
@@ -190,22 +187,31 @@ export function createAudioToolsPanel(box) {
     return view;
   }
 
-  function advancedView() {
-    const pythonInput = h("input", { type: "text", placeholder: "Python の実行ファイルのパス(空欄 = 自動)", value: audio.pythonPath ?? "", style: "width: 100%" });
+  function moreView() {
+    const pythonInput = h("input", { type: "text", placeholder: "Python のパス(空欄 = 自動)", value: audio.pythonPath ?? "" });
     const model = h("select", {}, ...["htdemucs", "htdemucs_ft"].map((m) => h("option", { value: m, selected: m === audio.model, textContent: m === "htdemucs" ? "htdemucs(標準・速い)" : "htdemucs_ft(高精度・約4倍遅い)" })));
     model.addEventListener("change", () => saveModel(model.value));
-    return h("details", {},
-      h("summary", { textContent: "詳しい設定(手動で入れる場合のコマンド、Python の指定、モデル)" }),
-      ...audio.install.filter((step) => step.kind !== "system").flatMap((step) => [
-        h("p", { className: "meta", textContent: step.label }),
-        h("div", { className: "cmd" }, h("pre", { textContent: step.command }), copyButton(step.command)),
-        ...(step.note ? [h("p", { className: "meta", textContent: step.note })] : []),
-      ]),
-      h("p", { className: "meta", textContent: "別の Python を使う場合は、そのパスを指定します(Demucs を入れた環境など)。" }),
-      pythonInput,
-      h("div", { className: "panel-actions" }, button("このパスを使う", () => savePython(pythonInput.value.trim() || null)), button("自動に戻す", () => savePython(null))),
-      h("label", { className: "meta", textContent: "分離のモデル: " }, model),
+    return h("details", { className: "sec-more" },
+      h("summary", { textContent: "詳しい設定" }),
+      h("div", { className: "sec-more-body" },
+        button("再確認", recheck),
+        h("p", { className: "sec-note", textContent: "Python のパス(Demucs を入れた別の環境を使う場合)" }),
+        pythonInput,
+        h("div", { className: "panel-actions" }, button("使う", () => savePython(pythonInput.value.trim() || null)), button("自動に戻す", () => savePython(null))),
+        h("label", { className: "sec-note", textContent: "分離のモデル: " }, model),
+        ...audio.install.filter((step) => step.kind !== "system").flatMap((step) => [
+          h("p", { className: "sec-note", textContent: `手動で入れる場合: ${step.label}` }),
+          h("div", { className: "cmd" }, h("pre", { textContent: step.command }), copyButton(step.command)),
+        ]),
+      ),
     );
+  }
+
+  function updateSummary() {
+    if (!audio) return setSummary("確認中…", "neutral");
+    if (install?.state === "running") return setSummary("導入中…", "neutral");
+    if (audio.ready.separate) return setSummary(audio.cuda ? "✓ 使えます · GPU" : "✓ 使えます", "ok");
+    return setSummary(audio.ready.beats ? "△ ビート解析のみ" : "⚠ 導入が必要", "warn");
   }
 
   function render(force = false) {
@@ -213,13 +219,9 @@ export function createAudioToolsPanel(box) {
     const key = JSON.stringify([audio, install, plan, confirming, wantGpu]);
     if (!force && key === shownKey) return;
     shownKey = key;
-    if (!audio) return box.replaceChildren(h("p", { className: "meta", textContent: "確認中…(初回は数秒かかります)" }));
-    box.replaceChildren(
-      ...statusView(),
-      ...primaryView(),
-      h("div", { className: "panel-actions" }, button("再確認", recheck)),
-      advancedView(),
-    );
+    updateSummary();
+    if (!audio) return box.replaceChildren(h("p", { className: "sec-note", textContent: "確認中…(初回は数秒かかります)" }));
+    box.replaceChildren(chips(), ...primaryView(), moreView());
   }
 
   render(true);
