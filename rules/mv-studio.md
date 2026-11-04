@@ -37,11 +37,13 @@ songs on the right. The current directory is ONE MV project. These rules are sup
     check it against `bpm_alternatives` and the hit spacing before you rely on it). `used_drums_stem: false` means the
     snare and hat times are rougher. If a song has no stems or beats yet, tell the user to press the button; do not
     install or run Demucs yourself.
-- Every image and video has an id (1, 2, 3, ..., separately for each library), shown in the app as `#3`. The ledgers are
-  `Output/image/index.json` and `Output/video/index.json` (`items: [{id, name}]`); only the app writes them. When the
-  user says "image 3", "画像3", "動画2" or "#3", look the id up in the matching ledger and use that file. If the id is
-  missing, the file was trashed or never seen by the app: say so instead of guessing. A file you just saved has no id
-  until the app notices it, so refer to your own new files by file name (also inside `.gen.json`).
+- Every song, image and video has an id (1, 2, 3, ..., separately for each library), shown in the app as `#3`. The ledgers are
+  `Output/song/index.json`, `Output/image/index.json` and `Output/video/index.json` (`items: [{id, name}]`); only the app writes
+  them. For images and videos `name` is the file name. For songs it is the song's base path under `Output`, e.g.
+  `song/x` (the audio is `Output/song/x.mp3`, `.wav`, `.m4a` or `.ogg`; a song that is only a preview has just
+  `x.suno.json`). When the user says "song 3", "曲3", "image 3", "画像3", "動画2" or "#3", look the id up in the
+  matching ledger and use that file; if the kind is not clear, ask. If the id is missing, the file was trashed or never seen
+  by the app: say so instead of guessing. A file you just saved has no id until the app notices it, so refer to your own new files by file name (also inside `.gen.json`).
 
 ## Songs: preview first, download only on request
 

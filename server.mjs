@@ -14,6 +14,7 @@ import { createSongJobs, listStems } from "./song-jobs.mjs";
 import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
 import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listNumberedImages, saveImage } from "./images.mjs";
 import { listNumberedVideos, videoContentType, videoPath } from "./videos.mjs";
+import { listNumbered } from "./library-core.mjs";
 import { deleteItems, emptyTrash, listTrash, restoreItems, trashMediaByName, trashSongsByBase } from "./trash.mjs";
 import { AudioError, MAX_AUDIO_BYTES, saveAudioStream } from "./audio.mjs";
 import { SessionLimitError, createSessions } from "./sessions.mjs";
@@ -256,6 +257,18 @@ function cleanSettings(value) {
     .filter(([, v]) => ["string", "number", "boolean"].includes(typeof v))
     .slice(0, MAX_SETTINGS)
     .map(([k, v]) => [k.slice(0, MAX_SETTING_KEY), String(v).slice(0, MAX_SETTING_VALUE)]);
+}
+
+/**
+ * The project's songs with ids (#1, #2, ...) from Output/song/index.json, keyed by each song's base path ("song/x"),
+ * so a song keeps its id when its audio is downloaded later. Only the opened project is numbered: the project list also
+ * reads songs, and it must not write a ledger into every project.
+ */
+async function listNumberedSongs(pj) {
+  const songs = await listSongs(pj);
+  const numbered = await listNumbered(join(pjDir(pj), "Output", "song"), async () => songs.map((s) => ({ name: s.base, mtime: s.mtime })));
+  const idOf = new Map(numbered.map((n) => [n.name, n.id]));
+  return songs.map((s) => ({ ...s, id: idOf.get(s.base) }));
 }
 
 async function listSongs(pj) {
@@ -590,6 +603,7 @@ const server = createServer(async (req, res) => {
       const answer = Array.isArray(rest) && !rest.length && skipped.length
         ? { moved: [], failed: [] } // everything asked for is busy: report that, not an "empty list" error
         : await trashSongsByBase({ trashRoot: TRASH, pjName: body.pj, pjDir: pjDir(body.pj), bases: rest });
+      await listNumberedSongs(body.pj); // retire the moved songs' ids now, so a song put back later is a new one
       return json(res, 200, { moved: answer.moved, failed: [...skipped, ...answer.failed] });
     }
     if (url.pathname === "/api/audio-tools" && req.method === "GET") return json(res, 200, await audioTools.status({ refresh: url.searchParams.get("refresh") === "1" }));
@@ -647,7 +661,7 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === "/api/songs") {
       if (!pjDir(url.searchParams.get("pj"))) return json(res, 400, { error: "bad project" });
-      return json(res, 200, await listSongs(url.searchParams.get("pj")));
+      return json(res, 200, await listNumberedSongs(url.searchParams.get("pj")));
     }
     if (url.pathname === "/file") return serveAudio(req, res, url);
     res.writeHead(404);

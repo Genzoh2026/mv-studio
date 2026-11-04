@@ -1,5 +1,5 @@
 // What the image and video libraries share: the numbering ledger (index.json).
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 // ---- numbering: every file gets an id (1, 2, 3, ...) so the user can say "image 3" to Claude ----
@@ -39,6 +39,7 @@ async function readIndex(dir) {
 }
 
 async function writeIndex(dir, index) {
+  await mkdir(dir, { recursive: true }); // songs are numbered in Output/song even when no file has been put there yet
   const tmp = join(dir, `${INDEX_FILE}.tmp`);
   await writeFile(tmp, JSON.stringify(index, null, 2));
   await rename(tmp, join(dir, INDEX_FILE));

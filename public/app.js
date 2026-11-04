@@ -293,7 +293,7 @@ async function redrawSongsIfChanged() {
   const bases = new Set(songs.map((s) => s.base));
   for (const base of selectedSongs) if (!bases.has(base)) selectedSongs.delete(base);
   renderSongsBar();
-  const key = viewing + JSON.stringify(songs.map((s) => [s.base, s.path ?? s.sunoId, s.mtime, songTools.cardKey(s), s.analysis?.mtime ?? s.analysis?.error, s.timings?.mtime ?? s.timings?.error]));
+  const key = viewing + JSON.stringify(songs.map((s) => [s.id, s.base, s.path ?? s.sunoId, s.mtime, songTools.cardKey(s), s.analysis?.mtime ?? s.analysis?.error, s.timings?.mtime ?? s.timings?.error]));
   if (key === songsKey) return;
   songsKey = key;
   songChecks.clear();
@@ -411,7 +411,11 @@ function songCard(song) {
   pick.addEventListener("click", (event) => pickSong(song, event));
   const title = document.createElement("h2");
   title.textContent = song.title;
-  head.append(pick, title);
+  const idBadge = document.createElement("span");
+  idBadge.className = "img-id inline";
+  idBadge.textContent = `#${song.id}`;
+  idBadge.title = `Claude には「曲${song.id}」または「#${song.id}」で指示できます`;
+  head.append(pick, idBadge, title);
   if (!song.path) {
     const badge = document.createElement("span");
     badge.className = "badge";
