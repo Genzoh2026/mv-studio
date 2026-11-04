@@ -1,6 +1,7 @@
 import { createDraftsTab } from "/drafts.js";
 import { createMediaLibrary } from "/media-library.js";
 import { attachDropZone, uploadFiles } from "/upload.js";
+import { createSongTools } from "/song-tools.js";
 import { toast } from "/toast.js";
 import { createRail } from "/rail.js";
 import { settingsTool } from "/settings.js";
@@ -275,8 +276,12 @@ async function endSession(pj) {
 
 // ---- songs of the opened project; re-render only on change so playback is not interrupted ----
 let songsKey = null;
+const songTools = createSongTools({ getProject: () => viewing });
 
-async function refreshSongs() {
+// The song list, then the progress of any separation or analysis (updated in place, so a playing song is not redrawn).
+const refreshSongs = async () => { await redrawSongsIfChanged(); await songTools.refresh(); };
+
+async function redrawSongsIfChanged() {
   if (!viewing) return;
   const res = await fetch(`/api/songs?pj=${encodeURIComponent(viewing)}`);
   if (!res.ok) return;
@@ -285,10 +290,11 @@ async function refreshSongs() {
   const bases = new Set(songs.map((s) => s.base));
   for (const base of selectedSongs) if (!bases.has(base)) selectedSongs.delete(base);
   renderSongsBar();
-  const key = viewing + JSON.stringify(songs.map((s) => [s.base, s.path ?? s.sunoId, s.mtime, s.analysis?.mtime ?? s.analysis?.error, s.timings?.mtime ?? s.timings?.error]));
+  const key = viewing + JSON.stringify(songs.map((s) => [s.base, s.path ?? s.sunoId, s.mtime, songTools.cardKey(s), s.analysis?.mtime ?? s.analysis?.error, s.timings?.mtime ?? s.timings?.error]));
   if (key === songsKey) return;
   songsKey = key;
   songChecks.clear();
+  songTools.resetLines();
   if (!songs.length) {
     return songsList.replaceChildren(note("曲はまだありません。ここへ曲(mp3・wav・m4a・ogg)をドラッグ&ドロップするか、左の Claude に「Suno で曲を作って、試聴用に保存して」と頼んでください。"));
   }
@@ -411,13 +417,16 @@ function songCard(song) {
   }
   if (!song.path && song.name) head.append(downloadButton(song));
   if (song.sunoId) head.append(analyzeButton(song));
+  head.append(...songTools.buttons(song));
   if (song.detail.duration) {
     const dur = document.createElement("span");
     dur.className = "meta dur";
     dur.textContent = `${Math.round(song.detail.duration)}秒`;
     head.append(dur);
   }
-  el.append(head, player(song));
+  el.append(head, songTools.line(song), player(song));
+  const stems = songTools.stemsPanel(song);
+  if (stems) el.append(stems);
   const details = detailsPanel(song);
   if (details) el.append(details);
   return el;
@@ -516,6 +525,7 @@ function detailsPanel(song) {
     ["スタイル", d.style],
     ["作成", [created, d.kind].filter(Boolean).join(" · ") || null],
     ["解析", analysisText(song)],
+    ["ビート(このアプリで解析)", songTools.beatsText(song)],
   ].filter(([, value]) => value);
   if (!rows.length && !d.settings.length && !d.lyrics && !song.sunoId) return null;
 

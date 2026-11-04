@@ -61,3 +61,19 @@ export function readTimingsSummary(base) {
     return { words: words.length, mtime };
   });
 }
+
+/** Summary of <base>.beats.json (this app's own local beat analysis, tools/beats.py), or null when absent. */
+export function readBeatsSummary(base) {
+  return summarise(base + ".beats.json", (d, mtime) => {
+    if (typeof d !== "object" || d === null || Array.isArray(d)) return { error: "beats file must be an object" };
+    const count = (key) => (Array.isArray(d[key]) ? d[key].length : 0);
+    return {
+      bpm: finite(d.bpm),
+      bpmConfidence: finite(d.bpm_confidence),
+      bpmAlternatives: Array.isArray(d.bpm_alternatives) ? d.bpm_alternatives.map(finite).filter((v) => v !== null).slice(0, 4) : [],
+      beats: count("beats"), kick: count("kick"), snare: count("snare"), hat: count("hat"), pulse: count("pulse"),
+      usedDrumsStem: d.used_drums_stem === true,
+      mtime,
+    };
+  });
+}

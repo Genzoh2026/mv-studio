@@ -7,7 +7,9 @@ import { createReadStream, readFileSync } from "node:fs";
 import { basename, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
-import { readAnalysisSummary, readTimingsSummary } from "./analysis.mjs";
+import { readAnalysisSummary, readBeatsSummary, readTimingsSummary } from "./analysis.mjs";
+import { createAudioTools } from "./audio-tools.mjs";
+import { createSongJobs, listStems } from "./song-jobs.mjs";
 import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
 import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listNumberedImages, saveImage } from "./images.mjs";
 import { listNumberedVideos, videoContentType, videoPath } from "./videos.mjs";
@@ -54,6 +56,7 @@ const STATIC = {
   "/media-library.js": ["public/media-library.js", "text/javascript"],
   "/upload.js": ["public/upload.js", "text/javascript"],
   "/trash.js": ["public/trash.js", "text/javascript"],
+  "/song-tools.js": ["public/song-tools.js", "text/javascript"],
   "/toast.js": ["public/toast.js", "text/javascript"],
   "/rail.js": ["public/rail.js", "text/javascript"],
   "/settings.js": ["public/settings.js", "text/javascript"],
@@ -105,6 +108,9 @@ function childEnv() {
 }
 
 const sessions = createSessions({ command: SHELL, args: shellArgs, env: childEnv });
+// Song separation and beat analysis run in a Python found on this computer; nothing is bundled (see audio-tools.mjs).
+const audioTools = createAudioTools({ workspace: WORKSPACE, toolsDir: join(HERE, "tools") });
+const songJobs = createSongJobs({ tools: audioTools });
 
 /** Resolve a project name from the client to its folder, or null. The name must be a plain folder name under PJs. */
 function pjDir(name) {
@@ -272,7 +278,12 @@ async function listSongs(pj) {
   // Analysis files sit next to the song (same base path).
   const analysed = new Map();
   for (const base of [...local.map((s) => s.base), ...previews.map((p) => p.base)]) {
-    analysed.set(base, { analysis: await readAnalysisSummary(base), timings: await readTimingsSummary(base) });
+    analysed.set(base, {
+      analysis: await readAnalysisSummary(base),
+      timings: await readTimingsSummary(base),
+      beats: await readBeatsSummary(base),
+      stems: await listStems(base, output),
+    });
   }
   // The base path under Output ("song/x") names a song for the trash: everything beside it goes along.
   const relBase = (base) => base.slice(output.length + 1).split(sep).join("/");
@@ -438,6 +449,7 @@ function json(res, status, value) {
 /** Ends every Claude session, then exits shortly so the HTTP response above is delivered first. */
 function shutdown(code) {
   sessions.endAll();
+  songJobs.manager.stopAll();
   setTimeout(() => process.exit(code), SHUTDOWN_DELAY_MS);
 }
 
@@ -563,7 +575,41 @@ const server = createServer(async (req, res) => {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
       const body = await readBody(req, MAX_DRAFT_BODY);
       if (!(await existingPjDir(body.pj))) return json(res, 400, { error: "bad project" });
-      return json(res, 200, await trashSongsByBase({ trashRoot: TRASH, pjName: body.pj, pjDir: pjDir(body.pj), bases: body.bases }));
+      // A song that is being separated or analysed has files in use: leave it where it is.
+      const busy = new Set(songJobs.manager.list(body.pj).filter((j) => ["queued", "running"].includes(j.state)).map((j) => j.base));
+      const bases = body.bases;
+      const skipped = Array.isArray(bases) ? bases.filter((b) => busy.has(b)).map((b) => ({ name: b, error: "a separation or analysis is running for this song" })) : [];
+      const rest = Array.isArray(bases) ? bases.filter((b) => !busy.has(b)) : bases;
+      const answer = Array.isArray(rest) && !rest.length && skipped.length
+        ? { moved: [], failed: [] } // everything asked for is busy: report that, not an "empty list" error
+        : await trashSongsByBase({ trashRoot: TRASH, pjName: body.pj, pjDir: pjDir(body.pj), bases: rest });
+      return json(res, 200, { moved: answer.moved, failed: [...skipped, ...answer.failed] });
+    }
+    if (url.pathname === "/api/audio-tools" && req.method === "GET") return json(res, 200, await audioTools.status({ refresh: url.searchParams.get("refresh") === "1" }));
+    if (url.pathname === "/api/audio-tools/python" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      return json(res, 200, await audioTools.setPython((await readBody(req)).path ?? null));
+    }
+    if (url.pathname === "/api/audio-tools/model" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      return json(res, 200, await audioTools.setModel((await readBody(req)).model));
+    }
+    if (url.pathname === "/api/songs/process" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      const body = await readBody(req);
+      const dir = await existingPjDir(body.pj);
+      if (!dir) return json(res, 400, { error: "bad project" });
+      const job = await songJobs.enqueue({ pj: body.pj, pjDir: dir, base: body.base, kind: body.kind });
+      return json(res, 200, songJobs.manager.list(body.pj).find((j) => j.id === job.id));
+    }
+    if (url.pathname === "/api/jobs" && req.method === "GET") return json(res, 200, songJobs.manager.list(url.searchParams.get("pj") || undefined));
+    if (url.pathname === "/api/jobs/cancel" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      return json(res, 200, { cancelled: songJobs.manager.cancel((await readBody(req)).id) });
+    }
+    if (url.pathname === "/api/jobs/dismiss" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      return json(res, 200, { dismissed: songJobs.manager.dismiss((await readBody(req)).id) });
     }
     if (url.pathname === "/api/trash" && req.method === "GET") return json(res, 200, await listTrash(TRASH));
     if (url.pathname === "/api/trash/restore" && req.method === "POST") {
@@ -620,6 +666,6 @@ wss.on("connection", async (ws, req) => {
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => { sessions.endAll(); process.exit(0); });
 }
-process.on("exit", () => sessions.endAll());
+process.on("exit", () => { sessions.endAll(); songJobs.manager.stopAll(); });
 
 server.listen(PORT, HOST, () => console.log(`MV Studio: http://${HOST}:${PORT}  (workspace: ${WORKSPACE})`));

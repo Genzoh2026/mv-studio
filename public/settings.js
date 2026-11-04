@@ -30,7 +30,8 @@ export const settingsTool = {
     const actions = h("div", { className: "panel-actions" });
     const note = h("p", { className: "meta" });
     const claudeBox = h("div", { className: "claude-box" });
-    body.append(h("h4", { textContent: "Claude Code" }), claudeBox, h("h4", { textContent: "サーバー" }), rows, actions, note);
+    const audioBox = h("div", { className: "claude-box" });
+    body.append(h("h4", { textContent: "Claude Code" }), claudeBox, h("h4", { textContent: "音声ツール(曲の分離・ビート解析)" }), audioBox, h("h4", { textContent: "サーバー" }), rows, actions, note);
 
     let status = null;
     let confirming = null; // "restart" | "stop" | null
@@ -163,10 +164,68 @@ export const settingsTool = {
       note.textContent = "再起動を確認できませんでした。start.cmd のウィンドウを確認してください。";
     }
 
+    // ---- audio tools: what this computer has for separating songs and finding beats ----
+    let audio = null;
+    let audioKey = null;
+
+    async function loadAudio(refresh = false) {
+      try {
+        const res = await fetch(`/api/audio-tools${refresh ? "?refresh=1" : ""}`);
+        if (res.ok) audio = await res.json();
+      } catch { /* the server may be restarting */ }
+      renderAudio();
+      document.dispatchEvent(new CustomEvent("audio-tools-changed"));
+    }
+
+    async function saveAudio(path, payload, message) {
+      const res = await post(path, payload);
+      const answer = await res.json();
+      if (!res.ok) return toast(answer.error, { key: "audio-tools", kind: "error" });
+      audio = answer;
+      renderAudio(true);
+      document.dispatchEvent(new CustomEvent("audio-tools-changed"));
+      toast(message, { key: "audio-tools" });
+    }
+
+    function renderAudio(force = false) {
+      const key = JSON.stringify(audio);
+      if (!force && key === audioKey) return;
+      audioKey = key;
+      if (!audio) return audioBox.replaceChildren(h("p", { className: "meta", textContent: "確認中…(初回は数秒かかります)" }));
+      const mark = (ok, text) => h("p", { className: ok ? "ok" : "bad", textContent: `${ok ? "✓" : "✗"} ${text}` });
+      const pythonInput = h("input", { type: "text", placeholder: "Python の実行ファイルのパス(空欄 = 自動)", value: audio.pythonPath ?? "", style: "width: 100%" });
+      const model = h("select", {}, ...["htdemucs", "htdemucs_ft"].map((m) => h("option", { value: m, selected: m === audio.model, textContent: m === "htdemucs" ? "htdemucs(標準・速い)" : "htdemucs_ft(高精度・約4倍遅い)" })));
+      model.addEventListener("change", () => saveAudio("/api/audio-tools/model", { model: model.value }, `分離のモデルを ${model.value} にしました`));
+      audioBox.replaceChildren(
+        mark(audio.python.found, audio.python.found ? `Python ${audio.python.version}(${audio.python.where})` : "Python が見つかりません"),
+        mark(Boolean(audio.numpy), audio.numpy ? `numpy ${audio.numpy}(ビート解析)` : "numpy がありません(ビート解析に必要)"),
+        mark(Boolean(audio.demucs), audio.demucs ? `Demucs ${audio.demucs}(曲の分離)` : "Demucs がありません(曲の分離に必要)"),
+        mark(audio.ffmpeg.found, audio.ffmpeg.found ? `ffmpeg ${audio.ffmpeg.version}` : "ffmpeg が見つかりません"),
+        h("p", { className: "meta", textContent: audio.cuda ? "GPU(CUDA)が使えます。分離は速くなります。" : "GPU は使っていません(CPU で動きます。曲 1 分で数十秒〜数分)。" }),
+        ...audio.install.flatMap((step) => [
+          h("p", { className: "meta", textContent: step.label }),
+          h("div", { className: "cmd" }, h("pre", { textContent: step.command }), copyButton(step.command)),
+          ...(step.note ? [h("p", { className: "meta", textContent: step.note })] : []),
+        ]),
+        h("div", { className: "panel-actions" },
+          h("button", { type: "button", textContent: "再確認", onclick: async () => { audio = null; renderAudio(true); await loadAudio(true); toast(audio?.ready.separate ? "分離とビート解析が使えます" : audio?.ready.beats ? "ビート解析が使えます(分離には Demucs が必要です)" : "まだ足りないものがあります", { key: "audio-tools", kind: audio?.ready.beats ? "info" : "warn" }); } }),
+        ),
+        h("p", { className: "meta", textContent: "別の Python を使う場合は、そのパスを指定します(Demucs を入れた環境など)。" }),
+        pythonInput,
+        h("div", { className: "panel-actions" },
+          h("button", { type: "button", textContent: "このパスを使う", onclick: () => saveAudio("/api/audio-tools/python", { path: pythonInput.value.trim() || null }, pythonInput.value.trim() ? "Python のパスを保存しました" : "自動検出に戻しました") }),
+          h("button", { type: "button", textContent: "自動に戻す", onclick: () => saveAudio("/api/audio-tools/python", { path: null }, "自動検出に戻しました") }),
+        ),
+        h("label", { className: "meta", textContent: "分離のモデル: " }, model),
+      );
+    }
+
     renderInfo();
     renderClaude();
     renderActions();
+    renderAudio();
     load();
+    loadAudio();
     const timer = setInterval(load, REFRESH_MS);
     return () => clearInterval(timer);
   },

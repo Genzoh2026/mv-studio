@@ -27,6 +27,16 @@ songs on the right. The current directory is ONE MV project. These rules are sup
   - `inputs` lists the exact files you used (names, not ids). `parent` only for a new version of an earlier file.
   - `params` are flat key/value pairs (seconds, seed, resolution, ...). NEVER write API keys or tokens into it.
   - Spending generation credits (video, image APIs) needs the user's go-ahead first.
+- **Song stems and beats are made by the app, not by you** (the user presses a button on the song card; it runs on their
+  computer). You may READ the results, never write or edit them:
+  - `Output/song/<name>.stems/{vocals,drums,bass,other}.wav` (Demucs). Use `drums.wav` for hits and `vocals.wav` for
+    the voice instead of the full mix whenever you need to time something.
+  - `Output/song/<name>.beats.json`: `{"bpm", "bpm_alternatives", "beats": [seconds], "kick": [seconds], "snare": [...],
+    "hat": [...], "pulse": [...], "fps": 30, "low"/"mid"/"high"/"rms": [30 fps energy curves], "used_drums_stem": bool}`.
+    The hit times are reliable; the `bpm` is only an estimate (double or half the real tempo is a common mistake, so
+    check it against `bpm_alternatives` and the hit spacing before you rely on it). `used_drums_stem: false` means the
+    snare and hat times are rougher. If a song has no stems or beats yet, tell the user to press the button; do not
+    install or run Demucs yourself.
 - Every image and video has an id (1, 2, 3, ..., separately for each library), shown in the app as `#3`. The ledgers are
   `Output/image/index.json` and `Output/video/index.json` (`items: [{id, name}]`); only the app writes them. When the
   user says "image 3", "画像3", "動画2" or "#3", look the id up in the matching ledger and use that file. If the id is
