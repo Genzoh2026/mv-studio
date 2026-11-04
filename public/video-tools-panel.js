@@ -59,6 +59,7 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
   let pj = document.body.dataset.pj || "";
   let install = null;       // the running or last install
   let confirming = null;    // { id, scope, plan }
+  let bulk = null;          // { picked: Set<id>, plan } while the "install many" screen is open
   const open = new Set();   // entries whose explanation is shown
   let query = "";
   let category = "all";
@@ -134,7 +135,7 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     }, POLL_MS);
   }
 
-  const entryName = (id) => shortName(catalog?.entries.find((e) => e.id === id)?.name ?? id);
+  const entryName = (id) => (id ? shortName(catalog?.entries.find((e) => e.id === id)?.name ?? id) : `${install?.count ?? 0} 個のツール`);
 
   function announce() {
     if (install.state === "done") toast(`${entryName(install.entryId)} を導入しました`, { key: "video-tools" });
@@ -234,6 +235,54 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     );
   }
 
+  /** Entries the "install many" screen offers: everything the app can install that is not complete in this project yet. */
+  const bulkCandidates = () => catalog.entries.filter((e) => COMMAND_KINDS.has(e.kind) && e.installed.state !== "installed");
+  /** Paid or sign-in entries start unticked: the user opts in to those one by one. */
+  const bulkDefault = (e) => (!COST_LABELS[e.costs] && !e.signin);
+
+  async function refreshBulkPlan() {
+    const mine = bulk;
+    const ids = [...bulk.picked];
+    mine.plan = ids.length ? null : { ok: false, reason: "導入するツールを選んでください", steps: [] };
+    render();
+    if (!ids.length) return;
+    const plan = await get(`/api/video-tools/plan?scope=workspace&ids=${ids.map(encodeURIComponent).join(",")}`).catch(() => null);
+    if (bulk === mine && [...mine.picked].join() === ids.join()) mine.plan = plan ?? { ok: false, reason: "確認できませんでした", steps: [] };
+    render();
+  }
+
+  function openBulk() {
+    bulk = { picked: new Set(bulkCandidates().filter(bulkDefault).map((e) => e.id)), plan: null };
+    refreshBulkPlan();
+  }
+
+  async function startBulk() {
+    const res = await post("/api/video-tools/install", { ids: [...bulk.picked], scope: "workspace", confirmed: true });
+    const answer = await res.json();
+    if (!res.ok) return toast(answer.error, { key: "video-tools", kind: "error" });
+    bulk = null;
+    install = answer;
+    render();
+    schedule();
+  }
+
+  function bulkView() {
+    const { picked, plan } = bulk;
+    const rows = bulkCandidates().map((entry) => {
+      const warn = [COST_LABELS[entry.costs], entry.signin ? "サインインあり" : null].filter(Boolean).join("・");
+      const box = Object.assign(h("input", { type: "checkbox" }), { checked: picked.has(entry.id), onchange: () => { if (box.checked) picked.add(entry.id); else picked.delete(entry.id); refreshBulkPlan(); } });
+      return h("label", { className: "vt-bulk-row" }, box, ` ${shortName(entry.name)}`, ...(warn ? [h("span", { className: "bad", textContent: ` (${warn})` })] : []));
+    });
+    return h("div", { className: "vt-confirm" },
+      h("h4", { textContent: "未導入のツールをまとめて導入しますか?" }),
+      h("p", { className: "sec-note", textContent: `このワークスペースのすべてのプロジェクト(今ある ${projects.length} 個と、これから作る新しいプロジェクト)に入れます。有料・サインインが必要なものは、最初は選ばれていません。入れるほどセッションごとの読み込み量(トークン)が増えるので、使うものだけを選んでください。` }),
+      ...(rows.length ? rows : [h("p", { className: "sec-note", textContent: "未導入のツールはありません。" })]),
+      !plan ? h("p", { className: "sec-note", textContent: "確認中…" })
+        : !plan.ok ? h("p", { className: "bad", textContent: plan.reason })
+          : h("div", {}, h("p", { className: "sec-note", textContent: `入れる先: ${plan.targets.length ? plan.targets.join("、") : "(まだプロジェクトはありません)"}` }), h("p", { className: "sec-note", textContent: "実行するコマンド(この内容だけです。プロジェクトごとに1回ずつ実行します)" }), ...plan.steps.map((step) => h("pre", { className: "setup-cmd", textContent: step.display }))),
+      h("div", { className: "panel-actions" }, ...(plan?.ok ? [button(`導入する(${picked.size} 個)`, startBulk, "danger")] : []), button("やめる", () => { bulk = null; render(); })));
+  }
+
   const SCOPE_LABEL = (run) => (run.scope === "user" ? "(自分の Claude 全体)" : run.scope === "workspace" ? "(全プロジェクト)" : run.scope === "auto" ? `(新しいプロジェクト ${run.pj})` : `(${run.pj})`);
 
   /** Few steps are listed one by one; many (a whole workspace) as a count plus the step that is running now. */
@@ -304,7 +353,7 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
 
   function render(force = false) {
     if (destroyed) return;
-    const key = JSON.stringify([catalog, install, confirming, pj, projects, [...open]]);
+    const key = JSON.stringify([catalog, install, confirming, pj, projects, [...open], bulk && [[...bulk.picked], bulk.plan]]);
     if (!force && key === shownKey) return;
     shownKey = key;
     updateSummary();
@@ -312,6 +361,7 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     if (!catalog.available) return box.replaceChildren(h("p", { className: "bad", textContent: "ツール一覧(catalog/video-tools.json)を読み込めませんでした。アプリのログを確認してください。" }));
     if (install?.state === "running") return box.replaceChildren(runningView());
     if (confirming) return box.replaceChildren(confirmView());
+    if (bulk) return box.replaceChildren(bulkView());
     const chooser = h("select", { title: "導入先のプロジェクト" }, ...projects.map((name) => h("option", { value: name, selected: name === pj, textContent: name })));
     chooser.addEventListener("change", async () => { pj = chooser.value; catalog = await get(`/api/video-tools?pj=${encodeURIComponent(pj)}`); render(true); });
     const installable = catalog.entries.filter((e) => COMMAND_KINDS.has(e.kind));
@@ -324,6 +374,7 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
         h("span", { className: "sec-note", textContent: "導入先" }),
         projects.length ? chooser : h("span", { className: "sec-note", textContent: "プロジェクトを作ると導入できます" }),
         h("span", { className: "sec-sum", textContent: `導入済み ${done} / ${installable.length}` }),
+        ...(done < installable.length && projects.length ? [button("まとめて導入", openBulk, "vt-install", "未導入のツールを選んで、すべてのプロジェクトに入れます")] : []),
       ),
       ...(result ? [result] : []),
       filterBar,

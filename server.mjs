@@ -711,7 +711,7 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { available: true, auto: await catalogInstaller.auto(), ...(await describeCatalog(videoCatalog, { pjDir: dir ?? WORKSPACE, plugins: await getPlugins(dir ?? WORKSPACE) })) });
     }
     if (url.pathname === "/api/video-tools/plan" && req.method === "GET") {
-      return json(res, 200, await catalogInstaller.preview({ id: url.searchParams.get("id"), scope: url.searchParams.get("scope"), pj: url.searchParams.get("pj") }));
+      return json(res, 200, await catalogInstaller.preview({ id: url.searchParams.get("id"), ids: url.searchParams.get("ids")?.split(",").filter(Boolean), scope: url.searchParams.get("scope"), pj: url.searchParams.get("pj") }));
     }
     if (url.pathname === "/api/video-tools/install" && req.method === "GET") return json(res, 200, catalogInstaller.snapshot());
     if (url.pathname === "/api/video-tools/install" && req.method === "POST") {
@@ -719,7 +719,7 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       // The page shows the commands and asks first; the server insists that it did.
       if (body.confirmed !== true) return json(res, 400, { error: "the install needs the user's confirmation" });
-      return json(res, 200, await catalogInstaller.start({ id: body.id, scope: body.scope, pj: body.pj }));
+      return json(res, 200, await catalogInstaller.start({ id: body.id, ids: body.ids, scope: body.scope, pj: body.pj }));
     }
     if (url.pathname === "/api/video-tools/auto" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });

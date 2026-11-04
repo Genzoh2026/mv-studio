@@ -48,7 +48,7 @@ export function planInstall({ catalog, id, scope, pjDir = null, pjDirs = [], use
       const command = forScope(entry.kind, original, scope);
       // claude may live at a full path (the native install); the shell needs it quoted then.
       const run = command.startsWith("claude ") && claudeCommand !== "claude" ? `"${claudeCommand}"${command.slice("claude".length)}` : command;
-      steps.push({ command, display: command, run, cwd: target.dir, group: target.name });
+      steps.push({ command, display: command, run, cwd: target.dir, group: target.name, entryId: id });
     }
   }
   return { ok: true, reason: null, entry, steps };
@@ -95,15 +95,25 @@ export function createCatalogInstaller({ getCatalog, pjDirOf, pjDirsOf = async (
   let controller = null;
   const waitingProjects = []; // new projects that still need their automatic installs
 
-  async function plan({ id, scope, pj }) {
+  /** One entry (`id`) or several at once (`ids`). With several, a step's group is "<entry> @ <project>" so a failure skips only that entry in that project. */
+  async function plan({ id, ids, scope, pj }) {
     const pjDir = scope === "project" && pj ? await pjDirOf(pj) : null;
     if (scope === "project" && pj && !pjDir) return { ok: false, reason: "that project does not exist", steps: [] };
     const pjDirs = scope === "workspace" ? await pjDirsOf() : [];
-    return planInstall({ catalog: getCatalog(), id, scope, pjDir, pjDirs, userDir, claudeCommand: claudeCommand() });
+    const one = (entryId) => planInstall({ catalog: getCatalog(), id: entryId, scope, pjDir, pjDirs, userDir, claudeCommand: claudeCommand() });
+    if (!Array.isArray(ids)) return one(id);
+    if (!ids.length) return { ok: false, reason: "choose at least one entry", steps: [] };
+    const steps = [];
+    for (const entryId of [...new Set(ids)]) {
+      const planned = one(entryId);
+      if (!planned.ok) return planned;
+      steps.push(...planned.steps.map((s) => ({ ...s, group: `${entryId} @ ${s.group}` })));
+    }
+    return { ok: true, reason: null, steps };
   }
 
   const snapshot = () => ({
-    state: state.state, entryId: state.entryId, scope: state.scope, pj: state.pj,
+    state: state.state, entryId: state.entryId, count: state.count ?? 1, scope: state.scope, pj: state.pj,
     steps: state.steps.map(({ display, group, state: s }) => ({ display, group, state: s })),
     log: state.log.slice(-SHOWN_LOG_LINES), error: state.error, startedAt: state.startedAt, finishedAt: state.finishedAt,
   });
@@ -112,10 +122,10 @@ export function createCatalogInstaller({ getCatalog, pjDirOf, pjDirsOf = async (
    * Runs the steps of a plan in the background. A step that fails stops only its own group (its project): the other projects
    * still get theirs, and the run ends as an error that names the projects that failed.
    */
-  function execute(planned, { entryId, scope, pj }, onSuccess) {
+  function execute(planned, { entryId, scope, pj, count = 1 }, onFinish) {
     controller = new AbortController();
     const { signal } = controller;
-    state = { state: "running", entryId, scope, pj, steps: planned.steps.map((s) => ({ ...s, state: "waiting" })), log: [], error: null, startedAt: Date.now(), finishedAt: null };
+    state = { state: "running", entryId, count, scope, pj, steps: planned.steps.map((s) => ({ ...s, state: "waiting" })), log: [], error: null, startedAt: Date.now(), finishedAt: null };
     const push = (text) => {
       for (const line of text.split(/[\r\n]+/)) { const clean = cleanLine(line); if (clean) state.log.push(clean.slice(0, 300)); }
       if (state.log.length > MAX_LOG_LINES) state.log.splice(0, state.log.length - MAX_LOG_LINES);
@@ -133,8 +143,8 @@ export function createCatalogInstaller({ getCatalog, pjDirOf, pjDirsOf = async (
           step.state = "error";
           failed.set(step.group, state.log.filter((l) => !l.startsWith("> ") && !l.startsWith("[")).slice(-2).join(" / ") || `exit code ${code}`);
         }
+        await onFinish?.(state.steps);
         if (failed.size) throw new Error([...failed].map(([group, why]) => `${group}: ${why}`).join(" ; "));
-        await onSuccess?.();
         state.state = "done";
       } catch (err) {
         const cancelled = signal.aborted;
@@ -186,7 +196,7 @@ export function createCatalogInstaller({ getCatalog, pjDirOf, pjDirsOf = async (
     /** What a start would run (the confirmation screen shows exactly this). */
     async preview(request) {
       const result = await plan(request);
-      const groups = [...new Set(result.steps.map((s) => s.group))];
+      const groups = [...new Set(result.steps.map((s) => s.group.split(" @ ").pop()))];
       // For the workspace scope the commands repeat per project: show each command once and name the projects.
       const unique = result.steps.filter((s, i) => result.steps.findIndex((o) => o.display === s.display) === i);
       return { ok: result.ok, reason: result.reason, steps: unique.map(({ display, cwd }) => ({ display, cwd })), targets: request.scope === "workspace" ? groups : [], auto: request.scope === "workspace" };
@@ -197,9 +207,15 @@ export function createCatalogInstaller({ getCatalog, pjDirOf, pjDirsOf = async (
       if (isBusy()) throw new Error("the tools setup is running; wait until it finishes");
       const planned = await plan(request);
       if (!planned.ok) throw new Error(planned.reason);
-      return execute(planned, { entryId: request.id, scope: request.scope, pj: request.scope === "project" ? request.pj : null },
-        // After the workspace install, every project created from now on gets the entry too.
-        request.scope === "workspace" ? async () => { const ids = await autoStore.read().catch(() => []); if (!ids.includes(request.id)) await autoStore.write([...ids, request.id]); } : undefined);
+      const wanted = Array.isArray(request.ids) ? [...new Set(request.ids)] : [request.id];
+      // After a workspace install, every project created from now on gets the entries that were fully installed too.
+      const register = request.scope === "workspace" ? async (steps) => {
+        const complete = wanted.filter((id) => steps.filter((s) => s.entryId === id).every((s) => s.state === "done"));
+        const ids = await autoStore.read().catch(() => []);
+        const next = [...ids, ...complete.filter((id) => !ids.includes(id))];
+        if (next.length !== ids.length) await autoStore.write(next);
+      } : undefined;
+      return execute(planned, { entryId: wanted.length === 1 ? wanted[0] : null, scope: request.scope, pj: request.scope === "project" ? request.pj : null, count: wanted.length }, register);
     },
 
     /** A project was just created: queue the entries that every project of this workspace should have. */

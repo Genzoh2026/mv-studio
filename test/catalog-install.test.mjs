@@ -217,3 +217,26 @@ test("the automatic install can be switched off and on per entry, and only for e
   await assert.rejects(inst.setAuto("ffmpeg", true), /cannot be installed by the app/);
   await assert.rejects(inst.setAuto("nope", true), /cannot be installed by the app/);
 });
+
+test("batch install: several entries in every project, a failure skips only that entry in that project, and fully installed entries become automatic", async () => {
+  const store = memoryStore();
+  const ran = [];
+  const inst = workspaceInstaller({
+    autoStore: store,
+    run: async (line, { cwd, onData }) => { ran.push(`${line.split(" ").slice(0, 3).join(" ")}@${cwd.split("/").pop()}`); if (line.startsWith("claude plugin marketplace") && cwd.endsWith("p2")) { onData("ERROR: boom\n"); return 1; } return 0; },
+  });
+  const preview = await inst.preview({ ids: ["hyperframes", "gsap-skills"], scope: "workspace" });
+  assert.equal(preview.ok, true);
+  assert.deepEqual(preview.targets, ["p1", "p2"]);
+  assert.equal(preview.steps.length, 3, "each distinct command once");
+  await inst.start({ ids: ["hyperframes", "gsap-skills"], scope: "workspace" });
+  const result = await until(inst, ["done", "error"]);
+  assert.equal(result.state, "error");
+  assert.equal(result.count, 2);
+  assert.match(result.error, /hyperframes @ p2/);
+  assert.ok(ran.includes("npx skills add@p2"), "the other entry still runs in the project where the first failed");
+  assert.ok(!ran.includes("claude plugin install@p2"), "the failed entry's later step is skipped");
+  assert.deepEqual(store.ids, ["gsap-skills"], "only the entry that fully succeeded is automatic");
+  assert.equal((await workspaceInstaller().preview({ ids: [], scope: "workspace" })).ok, false);
+  assert.equal((await workspaceInstaller().preview({ ids: ["hyperframes", "ffmpeg"], scope: "workspace" })).ok, false, "one non-installable entry refuses the whole batch");
+});
