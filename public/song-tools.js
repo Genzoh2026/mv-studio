@@ -26,6 +26,7 @@ export function createSongTools({ getProject }) {
   let jobs = [];
   const lines = new Map(); // song base -> its progress line, updated in place so a playing song is never redrawn
   const dismissed = new Set();
+  const confirming = new Map(); // base -> song, while the card asks whether to separate before analysing
 
   const jobsOf = (base) => jobs.filter((job) => job.base === base);
   // Until the first answer is in, assume the tool is there, so a button does not flash "needs setup" at every start.
@@ -48,13 +49,36 @@ export function createSongTools({ getProject }) {
       openSettings();
       return toast(`${label}には、音声ツールの導入が必要です。設定を開きました。「音声ツールを導入する」ボタンを押すと、自動で入ります(約 0.7 GB)。`, { key: "song-tool", kind: "warn", action: { label: "設定を開く", run: openSettings } });
     }
-    const res = await post("/api/songs/process", { pj: getProject(), base: song.base, kind });
+    // Beats work without stems but are rougher: say so and let the user choose.
+    if (kind === "beats" && !song.stems?.length) {
+      confirming.set(song.base, song);
+      return renderLine(song.base);
+    }
+    await begin(song, kind);
+  }
+
+  /** Queues the job on the server. `then` = "beats" makes a separation continue into the analysis by itself. */
+  async function begin(song, kind, then = null) {
+    confirming.delete(song.base);
+    const res = await post("/api/songs/process", { pj: getProject(), base: song.base, kind, ...(then ? { then } : {}) });
     const answer = await res.json();
+    renderLine(song.base);
     if (!res.ok) return toast(answer.error, { key: "song-tool", kind: "error" });
     dismissed.delete(answer.id);
     jobs = [...jobs.filter((job) => job.id !== answer.id), answer];
     renderLine(song.base);
-    toast(`「${song.title}」の${label}を始めました。終わるとここに結果が出ます。`, { key: "song-tool" });
+    toast(then ? `「${song.title}」を分離して、続けてビート解析します。画面を閉じても進みます。` : `「${song.title}」の${KIND_LABELS[kind]}を始めました。終わるとここに結果が出ます。`, { key: "song-tool" });
+  }
+
+  /** The question shown in the card: separating first makes the snare and hat times better. */
+  function confirmRow(song) {
+    const needsSetup = missing("separate");
+    return h("div", { className: "job confirm" },
+      h("span", { textContent: "分離していない曲です。先に声・ドラムなどを分離すると、スネアやハイハットの時刻の精度が上がります(分離は数分かかります)。どうしますか?" }),
+      h("button", { type: "button", className: "primary", textContent: needsSetup ? "分離してから解析(要導入)" : "分離してから解析", onclick: () => (needsSetup ? start(song, "separate") : begin(song, "separate", "beats")) }),
+      h("button", { type: "button", textContent: "このまま解析", title: "分離せずに、全体の音から解析します(スネア・ハイハットはやや粗くなります)", onclick: () => begin(song, "beats") }),
+      h("button", { type: "button", textContent: "やめる", onclick: () => { confirming.delete(song.base); renderLine(song.base); } }),
+    );
   }
 
   const button = (text, title, onclick, props = {}) => h("button", { type: "button", className: "dl", textContent: text, title, onclick, ...props });
@@ -80,15 +104,16 @@ export function createSongTools({ getProject }) {
     const el = lines.get(base);
     if (!el) return;
     const shown = jobsOf(base).filter((job) => !dismissed.has(job.id) && (["queued", "running", "error"].includes(job.state)));
-    el.hidden = shown.length === 0;
-    el.replaceChildren(...shown.map((job) => {
+    const ask = confirming.get(base);
+    el.hidden = shown.length === 0 && !ask;
+    el.replaceChildren(...(ask ? [confirmRow(ask)] : []), ...shown.map((job) => {
       const label = KIND_LABELS[job.kind];
       const row = h("div", { className: `job ${job.state}` });
       if (job.state === "error") {
         row.append(h("span", { textContent: `${label}に失敗しました: ${job.error}` }),
           h("button", { type: "button", textContent: "✕", title: "閉じる", onclick: async () => { dismissed.add(job.id); await post("/api/jobs/dismiss", { id: job.id }); renderLine(base); } }));
       } else {
-        const text = job.state === "queued" ? `${label}: 順番待ち…` : `${label}中… ${job.progress}%`;
+        const text = (job.state === "queued" ? `${label}: 順番待ち…` : `${label}中… ${job.progress}%`) + (job.then ? "(終わると、続けてビート解析)" : "");
         row.append(h("progress", { max: 100, value: job.state === "running" ? job.progress : 0 }), h("span", { textContent: text }),
           h("button", { type: "button", textContent: "取り消し", onclick: async () => { await post("/api/jobs/cancel", { id: job.id }); await refresh(); } }));
       }

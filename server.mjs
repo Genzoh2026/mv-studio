@@ -59,6 +59,7 @@ const STATIC = {
   "/trash.js": ["public/trash.js", "text/javascript"],
   "/song-tools.js": ["public/song-tools.js", "text/javascript"],
   "/audio-tools-panel.js": ["public/audio-tools-panel.js", "text/javascript"],
+  "/job-bar.js": ["public/job-bar.js", "text/javascript"],
   "/toast.js": ["public/toast.js", "text/javascript"],
   "/rail.js": ["public/rail.js", "text/javascript"],
   "/settings.js": ["public/settings.js", "text/javascript"],
@@ -618,7 +619,7 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const dir = await existingPjDir(body.pj);
       if (!dir) return json(res, 400, { error: "bad project" });
-      const job = await songJobs.enqueue({ pj: body.pj, pjDir: dir, base: body.base, kind: body.kind });
+      const job = await songJobs.enqueue({ pj: body.pj, pjDir: dir, base: body.base, kind: body.kind, then: body.then });
       return json(res, 200, songJobs.manager.list(body.pj).find((j) => j.id === job.id));
     }
     if (url.pathname === "/api/jobs" && req.method === "GET") return json(res, 200, songJobs.manager.list(url.searchParams.get("pj") || undefined));

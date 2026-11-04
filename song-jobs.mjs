@@ -75,6 +75,8 @@ export function createSongJobs({ tools, blocked = () => false }) {
       } finally {
         await rm(tmp, { recursive: true, force: true });
       }
+      // "Separate, then analyse": the analysis queues itself behind this job and picks up the new drums stem.
+      if (job.then === "beats") manager.enqueue({ pj: job.pj, base: job.base, kind: "beats", paths: job.paths, model: job.model, device: job.device, title: job.title });
       return;
     }
     const target = stemBase + BEATS_EXT;
@@ -93,7 +95,8 @@ export function createSongJobs({ tools, blocked = () => false }) {
     manager,
 
     /** Queues a job after checking the song and the tools. Throws SongJobError with a message the page can show. */
-    async enqueue({ pj, pjDir, base, kind }) {
+    async enqueue({ pj, pjDir, base, kind, then }) {
+      if (then !== undefined && then !== null && !(kind === "separate" && then === "beats")) throw new SongJobError("then: only \"beats\" can follow \"separate\"");
       if (!KINDS.includes(kind)) throw new SongJobError(`kind: one of ${KINDS.join(", ")}`);
       if (blocked()) throw new SongJobError("音声ツールの導入中です。終わってからやり直してください");
       const paths = await findSongAudio(pjDir, base);
@@ -103,7 +106,9 @@ export function createSongJobs({ tools, blocked = () => false }) {
         throw new SongJobError(kind === "separate" ? "Demucs is not set up (see Settings > Audio tools)" : "Python with numpy and ffmpeg are not set up (see Settings > Audio tools)");
       }
       if (kind === "separate" && (await exists(paths.stemBase + STEMS_EXT))) throw new SongJobError("stems already exist for this song");
-      return manager.enqueue({ pj, base, kind, paths, model: status.model, device: status.cuda ? "cuda" : "cpu", title: basename(base) });
+      // The follow-up needs the analysis tools too; checking now avoids a separation that cannot be followed.
+      if (then === "beats" && !status.ready.beats) throw new SongJobError("Python with numpy and ffmpeg are not set up (see Settings > Audio tools)");
+      return manager.enqueue({ pj, base, kind, then: then ?? null, paths, model: status.model, device: status.cuda ? "cuda" : "cpu", title: basename(base) });
     },
   };
 }

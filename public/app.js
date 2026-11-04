@@ -2,6 +2,7 @@ import { createDraftsTab } from "/drafts.js";
 import { createMediaLibrary } from "/media-library.js";
 import { attachDropZone, uploadFiles } from "/upload.js";
 import { createSongTools } from "/song-tools.js";
+import { createJobBar } from "/job-bar.js";
 import { toast } from "/toast.js";
 import { createRail } from "/rail.js";
 import { settingsTool } from "/settings.js";
@@ -277,6 +278,8 @@ async function endSession(pj) {
 // ---- songs of the opened project; re-render only on change so playback is not interrupted ----
 let songsKey = null;
 const songTools = createSongTools({ getProject: () => viewing });
+// Progress of separations, analyses and the tool setup, along the bottom edge, whichever tab is open.
+createJobBar({ root: $("job-bar") });
 
 // The song list, then the progress of any separation or analysis (updated in place, so a playing song is not redrawn).
 const refreshSongs = async () => { await redrawSongsIfChanged(); await songTools.refresh(); };

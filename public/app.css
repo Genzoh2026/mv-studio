@@ -222,3 +222,13 @@ body.rail-collapsed #rail-handle { display: block; }
 .claude-box button.primary, .panel-actions button.primary, button.primary { background: #2f5f8f; border-color: #4a78a8; color: #fff; padding: 8px 14px; font-weight: 600; }
 .claude-box button, .panel-actions button { cursor: pointer; }
 .song-head .dl.needs-setup { border-style: dashed; }
+.job.confirm { flex-wrap: wrap; padding: 6px 8px; background: #1f2630; border: 1px solid #3a5a7a; border-radius: 6px; }
+.job.confirm span { flex: 1 1 100%; }
+.job.confirm button { background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.job.confirm button.primary { background: #2f5f8f; border-color: #4a78a8; color: #fff; }
+#job-bar { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 4px 16px; border-top: 1px solid var(--line); background: #171a1f; font-size: 12px; color: var(--dim); }
+#job-bar .job-item { display: flex; align-items: center; gap: 10px; min-width: 0; }
+#job-bar progress { width: 140px; height: 6px; flex: none; }
+#job-bar .job-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c9ced6; }
+#job-bar button { background: transparent; color: var(--dim); border: 1px solid var(--line); border-radius: 4px; font: inherit; font-size: 11px; padding: 0 8px; cursor: pointer; }
+#job-bar button:hover { color: #e6e8eb; border-color: #8b93a1; }
