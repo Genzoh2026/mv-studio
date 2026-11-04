@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { execFile } from "node:child_process";
 import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { createReadStream, readFileSync } from "node:fs";
-import { basename, extname, join, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { readAnalysisSummary, readBeatsSummary, readTimingsSummary } from "./analysis.mjs";
@@ -168,9 +168,39 @@ function getPlugins(pjDirPath) {
 }
 
 // The install button for catalog entries (settings > video tools). It runs only the catalog's own checked commands.
+// The entries installed into every new project live in the workspace (outside the app's repository): [<workspace>/.mv-studio/auto-install.json].
+const AUTO_INSTALL_FILE = join(WORKSPACE, ".mv-studio", "auto-install.json");
+const autoStore = {
+  async read() {
+    try {
+      const data = JSON.parse(await readFile(AUTO_INSTALL_FILE, "utf8"));
+      return Array.isArray(data.ids) ? data.ids.filter((id) => typeof id === "string") : [];
+    } catch {
+      return [];
+    }
+  },
+  async write(ids) {
+    await mkdir(dirname(AUTO_INSTALL_FILE), { recursive: true });
+    const tmp = `${AUTO_INSTALL_FILE}.tmp`;
+    await writeFile(tmp, JSON.stringify({ version: 1, ids }, null, 2));
+    await rename(tmp, AUTO_INSTALL_FILE);
+  },
+};
+/** Every project folder of the workspace. */
+async function allPjDirs() {
+  try {
+    const entries = await readdir(PJS, { withFileTypes: true });
+    return entries.filter((e) => e.isDirectory() && PJ_NAME.test(e.name)).map((e) => ({ name: e.name, dir: join(PJS, e.name) })).sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return [];
+  }
+}
+
 const catalogInstaller = createCatalogInstaller({
   getCatalog: () => videoCatalog,
   pjDirOf: (pj) => existingPjDir(pj),
+  pjDirsOf: allPjDirs,
+  autoStore,
   userDir: WORKSPACE,
   claudeCommand: () => claude.command ?? "claude",
   isBusy: () => Boolean(installer?.running()),
@@ -224,6 +254,8 @@ async function createPj(title) {
   await writeFile(join(dir, "CLAUDE.md"), PROJECT_NOTES, { flag: "wx" }).catch((err) => {
     if (err.code !== "EEXIST") throw err;
   });
+  // The skills and plugins that every project should have are installed in the background; the project is usable meanwhile.
+  catalogInstaller.queueAuto(name);
   return name;
 }
 
@@ -676,7 +708,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/video-tools" && req.method === "GET") {
       if (!videoCatalog) return json(res, 200, { available: false, entries: [] });
       const dir = await existingPjDir(url.searchParams.get("pj"));
-      return json(res, 200, { available: true, ...(await describeCatalog(videoCatalog, { pjDir: dir ?? WORKSPACE, plugins: await getPlugins(dir ?? WORKSPACE) })) });
+      return json(res, 200, { available: true, auto: await catalogInstaller.auto(), ...(await describeCatalog(videoCatalog, { pjDir: dir ?? WORKSPACE, plugins: await getPlugins(dir ?? WORKSPACE) })) });
     }
     if (url.pathname === "/api/video-tools/plan" && req.method === "GET") {
       return json(res, 200, await catalogInstaller.preview({ id: url.searchParams.get("id"), scope: url.searchParams.get("scope"), pj: url.searchParams.get("pj") }));
@@ -688,6 +720,11 @@ const server = createServer(async (req, res) => {
       // The page shows the commands and asks first; the server insists that it did.
       if (body.confirmed !== true) return json(res, 400, { error: "the install needs the user's confirmation" });
       return json(res, 200, await catalogInstaller.start({ id: body.id, scope: body.scope, pj: body.pj }));
+    }
+    if (url.pathname === "/api/video-tools/auto" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      const body = await readBody(req);
+      return json(res, 200, { auto: await catalogInstaller.setAuto(body.id, body.enabled === true) });
     }
     if (url.pathname === "/api/video-tools/cancel" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });

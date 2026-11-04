@@ -6,7 +6,7 @@ import { toast } from "/toast.js";
 
 const POLL_MS = 1000;
 const SHOWN_LOG_LINES = 8;
-const STEP_ICON = { waiting: "○", running: "⏳", done: "✓", error: "✗", cancelled: "—" };
+const STEP_ICON = { waiting: "○", running: "⏳", done: "✓", error: "✗", cancelled: "—", skipped: "−" };
 const KIND_LABELS = { skills: "スキル", plugin: "プラグイン", mcp: "MCP", connector: "コネクタ", builtin: "アプリ内蔵", system: "PC に導入" };
 const STATE_LABELS = { installed: "導入済み", partial: "一部のみ", "not-installed": "未導入", unknown: "不明", builtin: "内蔵", manual: "手動" };
 const COST_LABELS = { none: null, "account-required": "アカウントが必要", "paid-accounts": "料金がかかります" };
@@ -181,6 +181,17 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
         return command ? h("div", { className: "cmd" }, h("pre", { textContent: command }), copyButton(command)) : h("p", { className: "sec-note", textContent: step });
       }));
     }
+    if (COMMAND_KINDS.has(entry.kind)) {
+      const on = (catalog.auto ?? []).includes(entry.id);
+      parts.push(h("label", { className: "sec-note" },
+        Object.assign(h("input", { type: "checkbox" }), { checked: on, onchange: async (ev) => {
+          const res = await post("/api/video-tools/auto", { id: entry.id, enabled: ev.target.checked });
+          if (res.ok) catalog = { ...catalog, auto: (await res.json()).auto };
+          else toast("切り替えに失敗しました", { key: "video-tools", kind: "error" });
+          render(true);
+        } }),
+        " 新しく作るプロジェクトに自動で入れる"));
+    }
     return h("div", { className: "vt-more" }, ...parts);
   }
 
@@ -195,7 +206,7 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     return h("div", { className: `vt-row${expanded ? " open" : ""}` },
       h("div", { className: "vt-line" },
         toggle,
-        COMMAND_KINDS.has(entry.kind) ? (canInstall ? button(state === "partial" ? "続き" : "導入", () => openConfirm(entry.id, "project"), "vt-install", "導入の内容を確認します") : stateText) : stateText),
+        COMMAND_KINDS.has(entry.kind) ? (canInstall ? button(state === "partial" ? "続き" : "導入", () => openConfirm(entry.id, "workspace"), "vt-install", "導入の内容を確認します") : stateText) : stateText),
       ...(expanded ? [details(entry)] : []),
     );
   }
@@ -208,7 +219,11 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     return h("div", { className: "vt-confirm" },
       h("h4", { textContent: `${shortName(entry.name)} を導入しますか?` }),
       h("p", { className: "sec-note", textContent: `${metaLine(entry)} · ライセンス ${entry.license}` }),
-      h("div", { className: "vt-scope" }, radio("project", `このプロジェクトだけ(${pj || "未選択"})`), radio("user", "すべてのプロジェクト(Claude 全体の設定に入ります)")),
+      h("div", { className: "vt-scope" },
+        radio("workspace", `このワークスペースのすべてのプロジェクト(今ある ${projects.length} 個と、これから作る新しいプロジェクト)`),
+        radio("project", `このプロジェクトだけ(${pj || "未選択"})`),
+        radio("user", "自分の Claude 全体(MV 以外の作業にも入ります)")),
+      ...(scope === "workspace" && plan?.ok ? [h("p", { className: "sec-note", textContent: `入れる先: ${plan.targets.length ? plan.targets.join("、") : "(まだプロジェクトはありません)"}。新しく作るプロジェクトにも自動で入ります(あとで各ツールの詳細から切り替えられます)。` })] : []),
       ...(entry.requires?.length ? [h("p", { className: "sec-note", textContent: "必要なもの(入っていないと動きません)" }), list(entry.requires)] : []),
       ...(cost || entry.signin ? [h("p", { className: "bad", textContent: [cost, entry.signin ? "初回にサインインします(あなたが行います)" : null].filter(Boolean).join("。") })] : []),
       ...(entry.notes_ja?.length ? [h("p", { className: "sec-note", textContent: "注意" }), list(entry.notes_ja)] : []),
@@ -219,12 +234,27 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     );
   }
 
+  const SCOPE_LABEL = (run) => (run.scope === "user" ? "(自分の Claude 全体)" : run.scope === "workspace" ? "(全プロジェクト)" : run.scope === "auto" ? `(新しいプロジェクト ${run.pj})` : `(${run.pj})`);
+
+  /** Few steps are listed one by one; many (a whole workspace) as a count plus the step that is running now. */
+  function stepLines(steps) {
+    if (steps.length <= 4) return steps.map((step) => h("p", { className: step.state === "error" ? "bad" : "sec-note", textContent: `${STEP_ICON[step.state]} ${step.group && step.group !== "project" && step.group !== "user" ? `[${step.group}] ` : ""}${step.display}` }));
+    const finished = steps.filter((s) => s.state === "done" || s.state === "skipped" || s.state === "error").length;
+    const current = steps.find((s) => s.state === "running");
+    const failed = steps.filter((s) => s.state === "error");
+    return [
+      h("p", { className: "sec-note", textContent: `${finished} / ${steps.length} 手順` }),
+      ...(current ? [h("p", { className: "sec-note", textContent: `${STEP_ICON.running} [${current.group}] ${current.display}` })] : []),
+      ...failed.map((s) => h("p", { className: "bad", textContent: `${STEP_ICON.error} [${s.group}] ${s.display}` })),
+    ];
+  }
+
   function runningView() {
     const log = h("pre", { className: "setup-log", textContent: install.log.slice(-SHOWN_LOG_LINES).join("\n") });
     queueMicrotask(() => { log.scrollTop = log.scrollHeight; });
     return h("div", { className: "vt-confirm" },
-      h("p", { textContent: `${entryName(install.entryId)} を導入しています…${install.scope === "user" ? "(すべてのプロジェクト)" : `(${install.pj})`}` }),
-      ...install.steps.map((step) => h("p", { className: step.state === "error" ? "bad" : "sec-note", textContent: `${STEP_ICON[step.state]} ${step.display}` })),
+      h("p", { textContent: `${entryName(install.entryId)} を導入しています…${SCOPE_LABEL(install)}` }),
+      ...stepLines(install.steps),
       log,
       button("取り消し", async () => { await post("/api/video-tools/cancel"); await load(); }));
   }
