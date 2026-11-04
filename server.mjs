@@ -13,7 +13,8 @@ import { createAudioTools } from "./audio-tools.mjs";
 import { createInstaller } from "./audio-install.mjs";
 import { createAgentAuth } from "./agent-auth.mjs";
 import { createAgentApi } from "./agent-api.mjs";
-import { loadCatalog } from "./catalog.mjs";
+import { describeCatalog, loadCatalog } from "./catalog.mjs";
+import { createCatalogInstaller } from "./catalog-install.mjs";
 import { createSongJobs, listStems } from "./song-jobs.mjs";
 import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
 import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listNumberedImages, saveImage } from "./images.mjs";
@@ -65,6 +66,7 @@ const STATIC = {
   "/song-tools.js": ["public/song-tools.js", "text/javascript"],
   "/audio-tools-panel.js": ["public/audio-tools-panel.js", "text/javascript"],
   "/job-bar.js": ["public/job-bar.js", "text/javascript"],
+  "/video-tools-panel.js": ["public/video-tools-panel.js", "text/javascript"],
   "/toast.js": ["public/toast.js", "text/javascript"],
   "/rail.js": ["public/rail.js", "text/javascript"],
   "/settings.js": ["public/settings.js", "text/javascript"],
@@ -162,6 +164,16 @@ function getPlugins(pjDirPath) {
   pluginCache.set(pjDirPath, { at: Date.now(), value });
   return value;
 }
+
+// The install button for catalog entries (settings > video tools). It runs only the catalog's own checked commands.
+const catalogInstaller = createCatalogInstaller({
+  getCatalog: () => videoCatalog,
+  pjDirOf: (pj) => existingPjDir(pj),
+  userDir: WORKSPACE,
+  claudeCommand: () => claude.command ?? "claude",
+  isBusy: () => Boolean(installer?.running()),
+  onFinished: () => pluginCache.clear(), // the next list must show what was just installed
+});
 
 const agentApi = createAgentApi({ auth: agentAuth, existingPjDir, listNumberedSongs, songJobs, installer, audioTools, readBody, json, catalog: videoCatalog, getPlugins });
 
@@ -516,6 +528,7 @@ function shutdown(code) {
   sessions.endAll();
   songJobs.manager.stopAll();
   installer.cancel();
+  catalogInstaller.cancel();
   setTimeout(() => process.exit(code), SHUTDOWN_DELAY_MS);
 }
 
@@ -657,6 +670,26 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/audio-tools/python" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
       return json(res, 200, await audioTools.setPython((await readBody(req)).path ?? null));
+    }
+    if (url.pathname === "/api/video-tools" && req.method === "GET") {
+      if (!videoCatalog) return json(res, 200, { available: false, entries: [] });
+      const dir = await existingPjDir(url.searchParams.get("pj"));
+      return json(res, 200, { available: true, ...(await describeCatalog(videoCatalog, { pjDir: dir ?? WORKSPACE, plugins: await getPlugins(dir ?? WORKSPACE) })) });
+    }
+    if (url.pathname === "/api/video-tools/plan" && req.method === "GET") {
+      return json(res, 200, await catalogInstaller.preview({ id: url.searchParams.get("id"), scope: url.searchParams.get("scope"), pj: url.searchParams.get("pj") }));
+    }
+    if (url.pathname === "/api/video-tools/install" && req.method === "GET") return json(res, 200, catalogInstaller.snapshot());
+    if (url.pathname === "/api/video-tools/install" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      const body = await readBody(req);
+      // The page shows the commands and asks first; the server insists that it did.
+      if (body.confirmed !== true) return json(res, 400, { error: "the install needs the user's confirmation" });
+      return json(res, 200, await catalogInstaller.start({ id: body.id, scope: body.scope, pj: body.pj }));
+    }
+    if (url.pathname === "/api/video-tools/cancel" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      return json(res, 200, { cancelled: catalogInstaller.cancel() });
     }
     if (url.pathname === "/api/audio-install" && req.method === "GET") return json(res, 200, installer.snapshot());
     if (url.pathname === "/api/audio-install/plan" && req.method === "GET") return json(res, 200, await installer.preview({ gpu: url.searchParams.get("gpu") === "1" }));

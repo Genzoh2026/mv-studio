@@ -640,6 +640,7 @@ const refreshActiveTab = () => refreshers[tab]();
 
 function showLibrary() {
   viewing = "";
+  delete document.body.dataset.pj;
   $("lib-header").hidden = false;
   libraryBox.hidden = false;
   $("pj-header").hidden = true;
@@ -650,6 +651,7 @@ function showLibrary() {
 }
 
 function openProject(pj, preferredTab) {
+  document.body.dataset.pj = pj; // the settings panel installs into the open project by default
   // Only a different project restarts the terminal view; the same one just shows its running session.
   if (pj !== attached) connect(pj);
   viewing = pj;

@@ -1,6 +1,7 @@
 // The settings tool: server status plus restart and stop. Both end every running Claude session, so they ask first.
 import { toast } from "/toast.js";
 import { createAudioToolsPanel } from "/audio-tools-panel.js";
+import { createVideoToolsPanel } from "/video-tools-panel.js";
 
 const REFRESH_MS = 5000;
 const RESTART_POLL_MS = 1000;
@@ -32,7 +33,8 @@ export const settingsTool = {
     const note = h("p", { className: "meta" });
     const claudeBox = h("div", { className: "claude-box" });
     const audioBox = h("div", { className: "claude-box" });
-    body.append(h("h4", { textContent: "Claude Code" }), claudeBox, h("h4", { textContent: "音声ツール(曲の分離・ビート解析)", id: "audio-tools-heading" }), audioBox, h("h4", { textContent: "サーバー" }), rows, actions, note);
+    const videoBox = h("div", { className: "claude-box" });
+    body.append(h("h4", { textContent: "Claude Code" }), claudeBox, h("h4", { textContent: "音声ツール(曲の分離・ビート解析)", id: "audio-tools-heading" }), audioBox, h("h4", { textContent: "動画ツール(スキル・プラグイン)", id: "video-tools-heading" }), videoBox, h("h4", { textContent: "サーバー" }), rows, actions, note);
 
     let status = null;
     let confirming = null; // "restart" | "stop" | null
@@ -167,12 +169,13 @@ export const settingsTool = {
 
     // The audio tools (separation, beat analysis) have their own module: status plus a one-button setup.
     const audioPanel = createAudioToolsPanel(audioBox);
+    const videoPanel = createVideoToolsPanel(videoBox);
 
     renderInfo();
     renderClaude();
     renderActions();
     load();
     const timer = setInterval(load, REFRESH_MS);
-    return () => { clearInterval(timer); audioPanel.destroy(); };
+    return () => { clearInterval(timer); audioPanel.destroy(); videoPanel.destroy(); };
   },
 };

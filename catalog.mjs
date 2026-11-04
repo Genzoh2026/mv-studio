@@ -19,14 +19,19 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const PLUGIN_ID = /^[a-z0-9][a-z0-9-]*@[a-z0-9][a-z0-9-]*$/;
 const SKILL_NAME = /^[a-z0-9][a-z0-9-]*$/;
 
-/** Why a command is not allowed in the catalog, or null when it is. Exported for tests. */
-export function commandProblem(kind, command) {
+/**
+ * Why a command is not allowed, or null when it is. Exported for tests. The catalog itself only ever holds `project` commands;
+ * `scope: "user"` is for the command the app derives from one when the user chooses "all projects" in the install dialog.
+ */
+export function commandProblem(kind, command, { scope = "project" } = {}) {
   if (typeof command !== "string" || !command.trim()) return "empty command";
   if (!SAFE_COMMAND.test(command)) return "contains a character that is not allowed (quotes, pipes, &, ;, <, >, $, backtick)";
   const words = command.split(" ");
   if (kind === "skills") {
     if (!command.startsWith("npx skills add ")) return "must start with `npx skills add `";
-    if (words.includes("-g") || words.includes("--global")) return "global install is not allowed (project scope only)";
+    if (words.includes("--global")) return "write -g, not --global";
+    if (scope === "project" && words.includes("-g")) return "global install is not allowed (project scope only)";
+    if (scope === "user" && !words.includes("-g")) return "a user-scope install must include -g";
     if (words.includes("--all")) return "--all is not allowed (name what is installed)";
     for (const flag of ["-a", "--copy", "-y"]) if (!words.includes(flag)) return `must include ${flag}`;
     if (words[words.indexOf("-a") + 1] !== "claude-code") return "-a must be claude-code";
@@ -35,12 +40,12 @@ export function commandProblem(kind, command) {
   if (kind === "plugin") {
     const form = command.startsWith("claude plugin marketplace add ") || command.startsWith("claude plugin install ");
     if (!form) return "must start with `claude plugin marketplace add ` or `claude plugin install `";
-    if (words[words.indexOf("--scope") + 1] !== "project") return "must include `--scope project`";
+    if (words[words.indexOf("--scope") + 1] !== scope) return `must include \`--scope ${scope}\``;
     return null;
   }
   if (kind === "mcp") {
     if (!command.startsWith("claude mcp add ")) return "must start with `claude mcp add `";
-    if (words[words.indexOf("--scope") + 1] !== "project") return "must include `--scope project`";
+    if (words[words.indexOf("--scope") + 1] !== scope) return `must include \`--scope ${scope}\``;
     return null;
   }
   return "this kind has no commands";

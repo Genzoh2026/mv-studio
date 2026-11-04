@@ -234,3 +234,18 @@ body.rail-collapsed #rail-handle { display: block; }
 #job-bar button:hover { color: #e6e8eb; border-color: #8b93a1; }
 .job.done { color: #6fd38c; }
 #job-bar .job-item.done .job-text { color: #6fd38c; }
+.vt-card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 8px 0; background: #171a1f; }
+.vt-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.vt-state { font-size: 12px; color: var(--dim); }
+.vt-state.installed, .vt-state.builtin { color: #6fd38c; }
+.vt-state.partial { color: #e6b450; }
+.vt-badges { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.vt-badge { font-size: 11px; padding: 0 6px; border: 1px solid var(--line); border-radius: 10px; color: var(--dim); }
+.vt-badge.warn { color: #e6b450; border-color: #6a5320; }
+.vt-card p { margin: 4px 0; }
+.vt-list { margin: 2px 0 6px; padding-left: 18px; font-size: 12px; color: #c9ced6; }
+.vt-details summary { cursor: pointer; color: var(--dim); font-size: 12px; margin-top: 4px; }
+.vt-confirm { border: 1px solid #3a5a7a; border-radius: 8px; padding: 8px 10px; margin: 8px 0; background: #1b222c; }
+.vt-confirm h4 { margin: 0 0 4px; }
+.vt-scope label { display: block; margin: 3px 0; font-size: 13px; }
+.vt-result { margin: 8px 0; }
