@@ -10,6 +10,7 @@ import { WebSocketServer } from "ws";
 import { readAnalysisSummary, readTimingsSummary } from "./analysis.mjs";
 import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
 import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listNumberedImages, saveImage, trashImages } from "./images.mjs";
+import { listNumberedVideos, trashVideos, videoContentType, videoPath } from "./videos.mjs";
 import { SessionLimitError, createSessions } from "./sessions.mjs";
 import { DOCS_URL, detectClaude, installCommands, installGuideText } from "./claude-cli.mjs";
 import { codeFingerprint } from "./version.mjs";
@@ -48,7 +49,7 @@ const STATIC = {
   "/": ["public/index.html", "text/html; charset=utf-8"],
   "/app.js": ["public/app.js", "text/javascript"],
   "/drafts.js": ["public/drafts.js", "text/javascript"],
-  "/images.js": ["public/images.js", "text/javascript"],
+  "/media-library.js": ["public/media-library.js", "text/javascript"],
   "/toast.js": ["public/toast.js", "text/javascript"],
   "/rail.js": ["public/rail.js", "text/javascript"],
   "/settings.js": ["public/settings.js", "text/javascript"],
@@ -350,6 +351,64 @@ async function serveImage(res, url) {
   }
 }
 
+const videoDir = (pjDirPath) => join(pjDirPath, "Output", "video");
+
+/** Moves videos to workspace\_Trash\videos\<project>__<time>\ (same idea as images). */
+async function trashProjectVideos(pjName, names) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const dir = videoDir(pjDir(pjName));
+  const result = await trashVideos(dir, join(TRASH, "videos", `${pjName}__${stamp}`), names);
+  await listNumberedVideos(dir);
+  return result;
+}
+
+/** The byte range a Range header asks for, {start, end} (inclusive), or null when it cannot be satisfied. */
+function parseRange(header, size) {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header);
+  if (!m || (!m[1] && !m[2])) return null;
+  let start;
+  let end;
+  if (!m[1]) { // "-N": the last N bytes
+    start = Math.max(size - Number(m[2]), 0);
+    end = size - 1;
+  } else {
+    start = Number(m[1]);
+    end = m[2] ? Math.min(Number(m[2]), size - 1) : size - 1;
+  }
+  return start <= end && start < size ? { start, end } : null;
+}
+
+/** Video bytes with Range support: browsers seek by asking for pieces, so without it a video cannot be scrubbed. */
+async function serveVideo(req, res, url) {
+  const dir = await existingPjDir(url.searchParams.get("pj"));
+  const target = dir && videoPath(videoDir(dir), url.searchParams.get("name"));
+  if (!target) {
+    res.writeHead(403);
+    return res.end("forbidden");
+  }
+  try {
+    const { size } = await stat(target);
+    const asked = req.headers.range;
+    const range = asked ? parseRange(asked, size) : { start: 0, end: size - 1 };
+    if (!range) {
+      res.writeHead(416, { "content-range": `bytes */${size}` });
+      return res.end();
+    }
+    res.writeHead(asked ? 206 : 200, {
+      "content-type": videoContentType(target),
+      "accept-ranges": "bytes",
+      "content-length": range.end - range.start + 1,
+      "x-content-type-options": "nosniff",
+      "cache-control": "private, max-age=3600",
+      ...(asked && { "content-range": `bytes ${range.start}-${range.end}/${size}` }),
+    });
+    createReadStream(target, range).pipe(res);
+  } catch (err) {
+    res.writeHead(404);
+    res.end(`not found: ${err.code}`);
+  }
+}
+
 async function readBody(req, limit = MAX_BODY) {
   let body = "";
   for await (const chunk of req) {
@@ -439,6 +498,17 @@ const server = createServer(async (req, res) => {
       return json(res, 200, await trashProjectImages(body.pj, body.names));
     }
     if (url.pathname === "/image" && req.method === "GET") return serveImage(res, url);
+    if (url.pathname === "/api/videos" && req.method === "GET") {
+      const dir = await existingPjDir(url.searchParams.get("pj"));
+      return dir ? json(res, 200, await listNumberedVideos(videoDir(dir))) : json(res, 400, { error: "bad project" });
+    }
+    if (url.pathname === "/api/videos/trash" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      const body = await readBody(req, MAX_DRAFT_BODY);
+      if (!(await existingPjDir(body.pj))) return json(res, 400, { error: "bad project" });
+      return json(res, 200, await trashProjectVideos(body.pj, body.names));
+    }
+    if (url.pathname === "/video" && req.method === "GET") return serveVideo(req, res, url);
     if (url.pathname === "/api/server" && req.method === "GET") {
       return json(res, 200, {
         pid: process.pid,

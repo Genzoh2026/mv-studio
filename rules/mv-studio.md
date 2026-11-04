@@ -7,13 +7,28 @@ songs on the right. The current directory is ONE MV project. These rules are sup
 
 - Everything you produce goes under `Output/<kind>/` (songs: `Output/song/`). Drafts go under `Drafts/`.
   The app only shows `Output/` and `Drafts/`; do not put assets anywhere else.
-- `Output/image/` is the image library. The user drops their own images there through the app; read them freely
-  (look at them with the Read tool), but NEVER modify, rename or delete them. Images you create go to the same
-  folder under a new name (png, jpg, webp or gif; the app does not show other formats).
-- Every image has an id (1, 2, 3, ...), shown in the app as `#3`. The ledger is `Output/image/index.json`
-  (`items: [{id, name}]`); only the app writes it. When the user says "image 3", "画像3" or "#3", look the id up there
-  and use that file. If the id is missing, the image was trashed or never seen by the app: say so instead of guessing.
-  A file you just saved has no id until the app notices it, so refer to your own new images by file name.
+- **Images** all live in `Output/image/` (png, jpg, webp or gif), whoever made them. **Videos** (cuts and finished
+  MVs) all live in `Output/video/` (mp4 with H.264/AAC, or webm; the browser must be able to play them).
+  Never put an image in the video library or the other way round.
+- **Who owns an image:** an image WITHOUT a `<name>.gen.json` next to it is the user's material (they drop it in through
+  the app). Read it freely (look at it with the Read tool), but NEVER modify, rename or delete it. An image or video
+  WITH a `.gen.json` is yours: you may create a new version, but never overwrite an existing one; save the change as
+  `<name>-v2.<ext>` and say in its `.gen.json` which version it came from.
+- **Every file you generate (image or video) needs a `<name>.gen.json`** (same base name), or the app shows it as
+  "origin unknown" and the user cannot trace it:
+  `{"kind": "still|cut|final", "inputs": [{"type": "song|image|video", "name": "<file name>"}],
+  "method": {"tool": "", "model": "", "prompt": "", "params": {"seconds": 5}, "created_at": "<ISO time>"},
+  "parent": {"name": "<file it is a new version of>", "comments": ["<ids of the review pins it addresses>"]},
+  "note": "<one or two sentences in Japanese: what you aimed for>"}`
+  - `kind`: `still` = a generated image, `cut` = a short video clip, `final` = a finished MV.
+  - `inputs` lists the exact files you used (names, not ids). `parent` only for a new version of an earlier file.
+  - `params` are flat key/value pairs (seconds, seed, resolution, ...). NEVER write API keys or tokens into it.
+  - Spending generation credits (video, image APIs) needs the user's go-ahead first.
+- Every image and video has an id (1, 2, 3, ..., separately for each library), shown in the app as `#3`. The ledgers are
+  `Output/image/index.json` and `Output/video/index.json` (`items: [{id, name}]`); only the app writes them. When the
+  user says "image 3", "画像3", "動画2" or "#3", look the id up in the matching ledger and use that file. If the id is
+  missing, the file was trashed or never seen by the app: say so instead of guessing. A file you just saved has no id
+  until the app notices it, so refer to your own new files by file name (also inside `.gen.json`).
 
 ## Songs: preview first, download only on request
 

@@ -1,5 +1,5 @@
 import { createDraftsTab } from "/drafts.js";
-import { createImagesTab } from "/images.js";
+import { createMediaLibrary } from "/media-library.js";
 import { toast } from "/toast.js";
 import { createRail } from "/rail.js";
 import { settingsTool } from "/settings.js";
@@ -484,20 +484,30 @@ setInterval(pollClaudeStatus, RAIL_POLL_MS);
 
 const draftsTab = createDraftsTab({ root: $("drafts"), getProject: () => viewing, typeToTerminal, isClaudeReady: () => claudeReady });
 
-const imagesTab = createImagesTab({ root: $("images"), getProject: () => viewing });
+// A link in one library's provenance panel can point into the other one.
+const libraries = {
+  image: createMediaLibrary({ root: $("images"), getProject: () => viewing, kind: "image", openOther: (kind, name) => showLibraryFile(kind, name) }),
+  video: createMediaLibrary({ root: $("videos"), getProject: () => viewing, kind: "video", openOther: (kind, name) => showLibraryFile(kind, name) }),
+};
+const tabOfKind = { image: "images", video: "videos" };
+function showLibraryFile(kind, name) {
+  showTab(tabOfKind[kind]);
+  libraries[kind].openByName(name);
+}
 // The panes inside a project, by the data-tab of their button.
-const tabBoxes = { drafts: $("drafts"), songs: songsBox, images: $("images") };
+const tabBoxes = { drafts: $("drafts"), songs: songsBox, images: $("images"), videos: $("videos") };
 
 function showTab(next) {
   tab = next;
   for (const button of document.querySelectorAll("#tabs button")) button.classList.toggle("on", button.dataset.tab === next);
   for (const [id, box] of Object.entries(tabBoxes)) box.hidden = id !== next;
   songsKey = null;
-  imagesTab.reset();
+  libraries.image.reset();
+  libraries.video.reset();
   refreshActiveTab();
 }
 
-const refreshers = { songs: () => refreshSongs(), images: () => imagesTab.refresh(), drafts: () => draftsTab.refresh() };
+const refreshers = { songs: () => refreshSongs(), images: () => libraries.image.refresh(), videos: () => libraries.video.refresh(), drafts: () => draftsTab.refresh() };
 const refreshActiveTab = () => refreshers[tab]();
 
 function showLibrary() {
