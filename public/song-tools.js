@@ -5,7 +5,12 @@ import { toast } from "/toast.js";
 
 const KIND_LABELS = { separate: "分離", beats: "ビート解析" };
 // The settings tool is the first button of the left rail; opening it shows the one-button setup.
-const openSettings = () => { const rail = document.querySelector(".rail-btn"); if (rail && !rail.classList.contains("on")) rail.click(); };
+// It opens the panel if needed and brings the audio tools section (with the setup button) into view.
+const openSettings = () => {
+  const rail = document.querySelector(".rail-btn");
+  if (rail && !rail.classList.contains("on")) rail.click();
+  setTimeout(() => document.getElementById("audio-tools-heading")?.scrollIntoView({ block: "start" }), 200);
+};
 
 const h = (tag, props = {}, ...children) => {
   const el = Object.assign(document.createElement(tag), props);
@@ -23,6 +28,8 @@ export function createSongTools({ getProject }) {
   const dismissed = new Set();
 
   const jobsOf = (base) => jobs.filter((job) => job.base === base);
+  // Until the first answer is in, assume the tool is there, so a button does not flash "needs setup" at every start.
+  const missing = (kind) => Boolean(tools) && !tools.ready[kind === "separate" ? "separate" : "beats"];
 
   async function loadTools() {
     try {
@@ -36,8 +43,10 @@ export function createSongTools({ getProject }) {
   async function start(song, kind) {
     const label = KIND_LABELS[kind];
     if (!tools) await loadTools();
-    if (tools && !tools.ready[kind === "separate" ? "separate" : "beats"]) {
-      return toast(`${label}に必要なものが足りません。`, { key: "song-tool", kind: "warn", action: { label: "導入画面を開く", run: openSettings } });
+    if (missing(kind)) {
+      // Do not just say it is missing: open the place where one button fixes it.
+      openSettings();
+      return toast(`${label}には、音声ツールの導入が必要です。設定を開きました。「音声ツールを導入する」ボタンを押すと、自動で入ります(約 0.7 GB)。`, { key: "song-tool", kind: "warn", action: { label: "設定を開く", run: openSettings } });
     }
     const res = await post("/api/songs/process", { pj: getProject(), base: song.base, kind });
     const answer = await res.json();
@@ -58,11 +67,11 @@ export function createSongTools({ getProject }) {
     return [
       stemsDone
         ? h("span", { className: "badge", textContent: "分離済み", title: "ステムは、下の「ステム」で聴けます" })
-        : button("🎚 声・楽器に分離", "曲を 声 / ドラム / ベース / その他 に分けます(この PC で実行。数分かかります)", () => start(song, "separate"), { disabled: busy("separate") }),
+        : button(missing("separate") ? "🎚 声・楽器に分離(要導入)" : "🎚 声・楽器に分離", missing("separate") ? "音声ツールの導入が必要です。押すと、導入の画面を開きます" : "曲を 声 / ドラム / ベース / その他 に分けます(この PC で実行。数分かかります)", () => start(song, "separate"), { disabled: busy("separate"), className: missing("separate") ? "dl needs-setup" : "dl" }),
       button(
-        song.beats && !song.beats.error ? "🔁 ビートを再解析" : "🥁 ビート解析",
-        stemsDone ? "ドラムのステムを使って、キック・スネア・ハイハットの時刻を求めます" : "キック・スネア・ハイハットの時刻とテンポを求めます。先に「分離」すると、より正確になります",
-        () => start(song, "beats"), { disabled: busy("beats") },
+        (song.beats && !song.beats.error ? "🔁 ビートを再解析" : "🥁 ビート解析") + (missing("beats") ? "(要導入)" : ""),
+        missing("beats") ? "音声ツールの導入が必要です。押すと、導入の画面を開きます" : stemsDone ? "ドラムのステムを使って、キック・スネア・ハイハットの時刻を求めます" : "キック・スネア・ハイハットの時刻とテンポを求めます。先に「分離」すると、より正確になります",
+        () => start(song, "beats"), { disabled: busy("beats"), className: missing("beats") ? "dl needs-setup" : "dl" },
       ),
     ];
   }
@@ -125,7 +134,8 @@ export function createSongTools({ getProject }) {
   }
 
   /** What makes a card out of date: finished results change it, progress does not (so playback is not interrupted). */
-  const cardKey = (song) => [song.stems?.length ?? 0, song.beats?.mtime ?? song.beats?.error ?? null];
+  // The labels depend on whether the tools are there, so a change of that redraws the cards too.
+  const cardKey = (song) => [song.stems?.length ?? 0, song.beats?.mtime ?? song.beats?.error ?? null, missing("separate"), missing("beats")];
 
   function resetLines() { lines.clear(); }
 

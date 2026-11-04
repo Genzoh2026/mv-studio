@@ -32,7 +32,7 @@ export const settingsTool = {
     const note = h("p", { className: "meta" });
     const claudeBox = h("div", { className: "claude-box" });
     const audioBox = h("div", { className: "claude-box" });
-    body.append(h("h4", { textContent: "Claude Code" }), claudeBox, h("h4", { textContent: "音声ツール(曲の分離・ビート解析)" }), audioBox, h("h4", { textContent: "サーバー" }), rows, actions, note);
+    body.append(h("h4", { textContent: "Claude Code" }), claudeBox, h("h4", { textContent: "音声ツール(曲の分離・ビート解析)", id: "audio-tools-heading" }), audioBox, h("h4", { textContent: "サーバー" }), rows, actions, note);
 
     let status = null;
     let confirming = null; // "restart" | "stop" | null

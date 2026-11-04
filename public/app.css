@@ -221,3 +221,4 @@ body.rail-collapsed #rail-handle { display: block; }
 .setup-gpu { display: block; margin: 8px 0; }
 .claude-box button.primary, .panel-actions button.primary, button.primary { background: #2f5f8f; border-color: #4a78a8; color: #fff; padding: 8px 14px; font-weight: 600; }
 .claude-box button, .panel-actions button { cursor: pointer; }
+.song-head .dl.needs-setup { border-style: dashed; }
