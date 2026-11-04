@@ -285,9 +285,366 @@
       ],
       "verified": "2026-11-05",
       "evidence": ["https://ffmpeg.org/download.html"]
+    },
+    {
+      "id": "vocaloid-style-mv",
+      "name": "vocaloid-style-mv(ボカロ風 MV・JIZURA 歌詞演出)",
+      "kind": "skills",
+      "category": ["music-video", "render", "captions"],
+      "maker": "community",
+      "status": "optional",
+      "summary_ja": "音声ファイルと歌詞から、Canvas2D・WebGL2・JIZURA 歌詞モーションを使って、16:9 と 9:16(縦動画)のボカロ風 MV をコードで描画するパイプライン(MIT)。",
+      "use_when_ja": "曲と歌詞から、タイポグラフィ演出の効いたボカロ風 MV(横動画と縦動画の両方)をコードで作るとき。",
+      "source": "https://github.com/EGSECDA/vocaloid-style-mv-pipeline",
+      "license": "MIT",
+      "requires": [
+        "Node.js 20 以上",
+        "Python 3.10 以上",
+        "ffmpeg と ffprobe",
+        "Microsoft Edge または Google Chrome(Playwright での描画に使う)",
+        "任意: Blender 5.x(トゥーン 3D 用)、faster-whisper(歌詞の自動同期用)"
+      ],
+      "costs": "none",
+      "signin": false,
+      "provides": { "skills": ["vocaloid-style-mv"] },
+      "install": {
+        "commands": [
+          "npx skills add EGSECDA/vocaloid-style-mv-pipeline -a claude-code --copy -y"
+        ]
+      },
+      "notes_ja": [
+        "初回セットアップ(setup.ps1 / setup.sh)で npm・pip のパッケージと OFL フォントを取得し、JIZURA(MIT、コミット fc16bfe 固定)をクローンしてビルドする。",
+        "README の手順はフォルダの手動コピーだが、このカタログでは npx skills add で project 範囲にコピーする。",
+        "tools/gigafile_upload.mjs(ギガファイル便へのアップロード)が含まれる。外部送信にあたるため、ユーザーの明示的な指示なしに実行しない。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": [
+        "https://github.com/EGSECDA/vocaloid-style-mv-pipeline",
+        "https://raw.githubusercontent.com/EGSECDA/vocaloid-style-mv-pipeline/main/skills/vocaloid-style-mv/SKILL.md",
+        "https://raw.githubusercontent.com/EGSECDA/vocaloid-style-mv-pipeline/main/LICENSE"
+      ]
+    },
+    {
+      "id": "kinetic-reel",
+      "name": "kinetic-reel(タイポグラフィ・ビート同期リール)",
+      "kind": "plugin",
+      "category": ["animation", "render"],
+      "maker": "community",
+      "status": "optional",
+      "summary_ja": "painted-animation と同じ作者(opus-video-skills)のプラグイン(MIT)。2D Canvas のタイポグラフィ、three.js の 3D 層、WebGL ポストエフェクトを重ねた 15〜30 秒のキネティック・タイポグラフィ動画を、ヘッドレス Chrome と ffmpeg で書き出す。",
+      "use_when_ja": "文字の動きと 3D・シェーダー演出を組み合わせた、短尺のタイポグラフィ動画・リールをコードで作るとき。",
+      "source": "https://github.com/tuzhechen2005/opus-video-skills",
+      "license": "MIT",
+      "requires": ["Claude Opus 4.6(README の推奨)", "Node.js", "Google Chrome", "ffmpeg"],
+      "costs": "none",
+      "signin": false,
+      "provides": { "plugin": "kinetic-reel@opus-video-skills", "skills": ["kinetic-reel"] },
+      "install": {
+        "commands": [
+          "claude plugin marketplace add tuzhechen2005/opus-video-skills --scope project",
+          "claude plugin install kinetic-reel@opus-video-skills --scope project"
+        ]
+      },
+      "notes_ja": [
+        "標準の流れでは 120 BPM の効果音・BGM を Node スクリプトで自動合成する(render.mjs の --audio で手持ちの音源も渡せる)。",
+        "three.js を unpkg CDN から読み込む HTML テンプレートを使うため、描画時にネットワークへ接続する。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": [
+        "https://github.com/tuzhechen2005/opus-video-skills",
+        "https://raw.githubusercontent.com/tuzhechen2005/opus-video-skills/main/.claude-plugin/marketplace.json",
+        "https://raw.githubusercontent.com/tuzhechen2005/opus-video-skills/main/skills/kinetic-reel/SKILL.md"
+      ]
+    },
+    {
+      "id": "kinetic-typography-skills",
+      "name": "kinetic-typography(動く文字・歌詞カードの設計)",
+      "kind": "skills",
+      "category": ["animation", "captions", "music-video"],
+      "maker": "community",
+      "status": "optional",
+      "summary_ja": "文字分割アニメーション、可変フォントのウェイト変化、パスに沿う文字、歌詞・タイトルカードの設計作法をまとめたスキル(MIT)。CSS・GSAP・Framer Motion・Remotion に対応し、?t= で指定時刻を静止画確認する手順を含む。",
+      "use_when_ja": "MV の歌詞表示やタイトルカードで、文字の動き・イージング・読みやすさを丁寧に設計したいとき。",
+      "source": "https://github.com/iart-ai/kinetic-typography-skills",
+      "license": "MIT",
+      "requires": ["Node.js(npx)"],
+      "costs": "none",
+      "signin": false,
+      "provides": { "skills": ["kinetic-typography"] },
+      "install": {
+        "commands": [
+          "npx skills add iart-ai/kinetic-typography-skills -a claude-code --copy -y"
+        ]
+      },
+      "notes_ja": [
+        "実行スクリプトを持たない知識スキル(SKILL.md と references/)で、外部通信や API キーは不要。",
+        "README に作成元サービス(iart.ai)への案内リンクがあるが、スキル自体の利用には関係しない。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": [
+        "https://github.com/iart-ai/kinetic-typography-skills",
+        "https://raw.githubusercontent.com/iart-ai/kinetic-typography-skills/main/skills/kinetic-typography/SKILL.md",
+        "https://raw.githubusercontent.com/iart-ai/kinetic-typography-skills/main/LICENSE"
+      ]
+    },
+    {
+      "id": "mort1d-motion-graphics",
+      "name": "motion-graphics(Mort1d 版・HTML モーションとビートカット)",
+      "kind": "plugin",
+      "category": ["animation", "render", "editing"],
+      "maker": "community",
+      "status": "optional",
+      "summary_ja": "HTML シーンを 60fps・サブフレームのモーションブラーつきで Chrome/Edge から描画し、手持ちの動画・画像素材のビートカットやシェーダー背景と組み合わせるプラグイン(MIT、npm 依存ゼロ)。",
+      "use_when_ja": "手持ちの映像クリップや静止画をビートに合わせて切り貼りしつつ、HTML のタイポグラフィやシェーダー背景を重ねたいとき。",
+      "source": "https://github.com/Mort1d/motion-graphics-skills",
+      "license": "MIT",
+      "requires": ["Node.js 22.4 以上", "ffmpeg と ffprobe", "Google Chrome / Microsoft Edge / Chromium"],
+      "costs": "none",
+      "signin": false,
+      "provides": { "plugin": "motion-graphics@motion-graphics-skills", "skills": ["motion-graphics"] },
+      "install": {
+        "commands": [
+          "claude plugin marketplace add Mort1d/motion-graphics-skills --scope project",
+          "claude plugin install motion-graphics@motion-graphics-skills --scope project"
+        ]
+      },
+      "notes_ja": [
+        "同梱の 7 書体はすべて SIL Open Font License 1.1。",
+        "付属の site-kit.mjs と ref-sheet.mjs は、URL を渡すと外部サイトや公開投稿を取得する。必要なときだけユーザーの指示で使う。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": [
+        "https://github.com/Mort1d/motion-graphics-skills",
+        "https://raw.githubusercontent.com/Mort1d/motion-graphics-skills/main/.claude-plugin/marketplace.json",
+        "https://raw.githubusercontent.com/Mort1d/motion-graphics-skills/main/skills/motion-graphics/SKILL.md"
+      ]
+    },
+    {
+      "id": "motion-launch-videos",
+      "name": "motion-launch-videos(Canvas 短尺モーション・12 スキル)",
+      "kind": "plugin",
+      "category": ["animation", "render", "captions"],
+      "maker": "community",
+      "status": "optional",
+      "summary_ja": "単一 HTML の seek(t) Canvas アニメーションを、モーションブラーつきで MP4・GIF・ポスター画像に書き出すプラグイン(MIT)。図形、カートゥーン、3D、チャート、ピクセル、パーティクル、字幕など 12 個の専門スキルが入る。",
+      "use_when_ja": "16:9・9:16・1:1 の短尺アニメーションやティザー映像を、純粋な Canvas コードで素早く作りたいとき。",
+      "source": "https://github.com/Kimeur/motion-launch-videos",
+      "license": "MIT",
+      "requires": ["Node.js 20 以上", "playwright-core と Chromium / Chrome", "ffmpeg と ffprobe", "npm と tar(フォント取得スクリプト用)"],
+      "costs": "none",
+      "signin": false,
+      "provides": {
+        "plugin": "motion-launch-videos@motion-launch-videos",
+        "skills": [
+          "motion-launch-videos",
+          "motion-shapes",
+          "motion-cartoon",
+          "motion-3d",
+          "motion-charts",
+          "motion-pixel",
+          "motion-particles",
+          "motion-ui",
+          "motion-photo",
+          "motion-captions",
+          "motion-overlays",
+          "motion-globe"
+        ]
+      },
+      "install": {
+        "commands": [
+          "claude plugin marketplace add Kimeur/motion-launch-videos --scope project",
+          "claude plugin install motion-launch-videos@motion-launch-videos --scope project"
+        ]
+      },
+      "notes_ja": [
+        "scripts/fonts.mjs は npm pack @fontsource/<pkg>@5 を実行して WOFF2 フォントを取得し、HTML に base64 で埋め込む。",
+        "音声は扱わない(映像のみの MP4 / GIF を出力する)。曲と合わせる場合は ffmpeg 等で結合する。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": [
+        "https://github.com/Kimeur/motion-launch-videos",
+        "https://raw.githubusercontent.com/Kimeur/motion-launch-videos/main/.claude-plugin/marketplace.json",
+        "https://raw.githubusercontent.com/Kimeur/motion-launch-videos/main/plugins/motion-launch-videos/skills/motion-launch-videos/SKILL.md"
+      ]
+    },
+    {
+      "id": "motion-reel",
+      "name": "motion-reel(Remotion 音楽同期リール・歌詞動画)",
+      "kind": "plugin",
+      "category": ["music-video", "render", "animation", "captions"],
+      "maker": "community",
+      "status": "optional",
+      "summary_ja": "手持ちの曲ファイルからビート・展開・声のタイミングを解析し、Remotion で音楽同期のモーションリールや歌詞動画を組み立てて MP4/WebM に書き出すプラグイン(MIT)。",
+      "use_when_ja": "曲ファイルと歌詞をもとに、Remotion でビート同期の歌詞動画やショート動画を自動構成したいとき。",
+      "source": "https://github.com/DeanSPN/motion-reel",
+      "license": "MIT",
+      "requires": ["Node.js 18 以上", "uv(Python パッケージ librosa・faster-whisper などの実行に使う)"],
+      "costs": "none",
+      "signin": false,
+      "provides": { "plugin": "motion-reel@motion-reel", "skills": ["motion-reel"] },
+      "install": {
+        "commands": [
+          "claude plugin marketplace add DeanSPN/motion-reel --scope project",
+          "claude plugin install motion-reel@motion-reel --scope project"
+        ]
+      },
+      "notes_ja": [
+        "音声解析スクリプトは uv run --with で librosa や faster-whisper を取得して実行する。このアプリのビート解析(.beats.json)がすでにある場合は、結果を見比べて使える。",
+        "過去の演出と重ならないよう、~/.claude/motion-reel/log.json に履歴を記録するスクリプトがある。",
+        "Remotion 本体のライセンス条件(従業員 4 名以上の営利組織は会社ライセンスが必要)に注意。コミット数が 1 件と新しいリポジトリなので、スクリプトを確認してから使う。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": [
+        "https://github.com/DeanSPN/motion-reel",
+        "https://raw.githubusercontent.com/DeanSPN/motion-reel/main/.claude-plugin/marketplace.json",
+        "https://raw.githubusercontent.com/DeanSPN/motion-reel/main/plugins/motion-reel/skills/motion-reel/SKILL.md"
+      ]
+    },
+    {
+      "id": "remotion-motion-graphics",
+      "name": "remotion-motion-graphics(Remotion モーション演出の作法)",
+      "kind": "skills",
+      "category": ["render", "animation", "captions"],
+      "maker": "community",
+      "status": "optional",
+      "summary_ja": "Remotion で映画風のタイトル、キネティック・タイポグラフィ、チャート、パーティクル、波形ビジュアライザーなどを作るための設計ルールとテンプレート集(MIT)。",
+      "use_when_ja": "Remotion で動画を作るときに、色・タイポグラフィ・カメラワーク・トランジションの品質を上げたいとき。公式の remotion-skills と併用できる。",
+      "source": "https://github.com/haidrrrry/claude-remotion-skill",
+      "license": "MIT",
+      "requires": ["Node.js(npx)", "Remotion のプロジェクト"],
+      "costs": "none",
+      "signin": false,
+      "provides": { "skills": ["remotion-motion-graphics"] },
+      "install": {
+        "commands": [
+          "npx skills add haidrrrry/claude-remotion-skill -a claude-code --copy -y"
+        ]
+      },
+      "notes_ja": [
+        "知識・コンポーネント例のスキルで、外部 API や追加の課金は不要。",
+        "README の手順はフォルダの手動コピーだが、このカタログでは npx skills add で project 範囲にコピーする。",
+        "Remotion 本体のライセンス条件(従業員 4 名以上の営利組織は会社ライセンスが必要)に注意。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": [
+        "https://github.com/haidrrrry/claude-remotion-skill",
+        "https://raw.githubusercontent.com/haidrrrry/claude-remotion-skill/main/remotion-motion-graphics/SKILL.md",
+        "https://raw.githubusercontent.com/haidrrrry/claude-remotion-skill/main/LICENSE"
+      ]
+    },
+    {
+      "id": "claude-music-video",
+      "name": "music-video-generator(ビート同期・シェーダー合成 MV)",
+      "kind": "plugin",
+      "category": ["music-video", "editing", "render"],
+      "maker": "community",
+      "status": "optional",
+      "summary_ja": "曲をビート解析し、手持ちの動画・写真や Internet Archive のパブリックドメイン映像をビートに合わせて編集・OpenGL シェーダーで合成する MV プラグイン(MIT)。",
+      "use_when_ja": "手持ちの映像クリップやアーカイブ映像を、曲のビートと GPU シェーダーエフェクトで MV にまとめたいとき。",
+      "source": "https://github.com/TheMarco/claude-music-video",
+      "license": "MIT",
+      "requires": [
+        "Python 3.10〜3.13(librosa、moderngl、opencv-python、rembg など)",
+        "ffmpeg",
+        "OpenGL 3.3 対応の GPU"
+      ],
+      "costs": "none",
+      "signin": false,
+      "provides": { "plugin": "music-video-generator@music-video", "skills": ["music-video"] },
+      "install": {
+        "commands": [
+          "claude plugin marketplace add TheMarco/claude-music-video --scope project",
+          "claude plugin install music-video-generator@music-video --scope project"
+        ]
+      },
+      "notes_ja": [
+        "README では macOS(Apple Silicon)で開発・検証されており、Windows / Linux はフォールバック実装あり(未検証)と記載されている。",
+        "アーカイブ映像モードを使うと archive.org に接続して動画を検索・ダウンロードする。AI 動画生成モード(任意)を使う場合は外部 MCP の有料クレジットがかかるため、事前にユーザーの承認を得る。",
+        "使用履歴を ~/.claude/music-video/ に保存する。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": [
+        "https://github.com/TheMarco/claude-music-video",
+        "https://raw.githubusercontent.com/TheMarco/claude-music-video/main/.claude-plugin/marketplace.json",
+        "https://raw.githubusercontent.com/TheMarco/claude-music-video/main/plugins/music-video-generator/skills/music-video/SKILL.md"
+      ]
+    },
+    {
+      "id": "ai-music-video",
+      "name": "ai-music-video(MV のビートグリッド・歌詞同期・検収設計)",
+      "kind": "skills",
+      "category": ["music-video", "captions", "editing"],
+      "maker": "community",
+      "status": "optional",
+      "summary_ja": "MV 制作の 8 段階ワークフロー(ビートグリッド算出、歌詞のタイミング合わせ、絵コンテ、コンタクトシート検収、音ズレ検査)をまとめたスキルと Python 補助スクリプト(MIT)。",
+      "use_when_ja": "コード描画(Canvas / Remotion 等)または映像クリップの MV で、ビート合わせ・歌詞同期・フレーム検収を厳密に進めたいとき。",
+      "source": "https://github.com/Dracowyn/ai-music-video-skill",
+      "license": "MIT",
+      "requires": [
+        "Node.js(npx)",
+        "Python 3.10 以上(numpy、scipy、soundfile、pillow)",
+        "ffmpeg と ffprobe",
+        "任意: faster-whisper または whisper-timestamped(歌詞の自動アライン用)"
+      ],
+      "costs": "none",
+      "signin": false,
+      "provides": { "skills": ["ai-music-video"] },
+      "install": {
+        "commands": [
+          "npx skills add Dracowyn/ai-music-video-skill -a claude-code --copy -y"
+        ]
+      },
+      "notes_ja": [
+        "コードだけで描画する方式(無料)と、外部の画像・動画生成 AI を使う方式の両方の設計手順が含まれる。有料の生成サービスを使う場合は、必ず事前にユーザーの承認を得る。",
+        "README の手順はフォルダの手動コピーだが、このカタログでは npx skills add で project 範囲にコピーする。コミット数が 4 件と新しいリポジトリなので、スクリプトを確認してから使う。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": [
+        "https://github.com/Dracowyn/ai-music-video-skill",
+        "https://raw.githubusercontent.com/Dracowyn/ai-music-video-skill/main/skills/ai-music-video/SKILL.md",
+        "https://raw.githubusercontent.com/Dracowyn/ai-music-video-skill/main/LICENSE"
+      ]
+    },
+    {
+      "id": "song-video-director",
+      "name": "song-video-director(楽曲解析からの MV 演出・コード設計)",
+      "kind": "skills",
+      "category": ["music-video", "render", "animation"],
+      "maker": "community",
+      "status": "optional",
+      "summary_ja": "曲と歌詞から音楽の特徴(BPM・キー・区間ごとのエネルギー)を JSON にまとめ、曲調に合った演出・色彩・コード描画(Remotion / p5.js / Three.js)を設計するスキル(MIT)。",
+      "use_when_ja": "曲の展開や歌詞のテーマから、MV 全体の構成・演出プラン・ビジュアライザーの設計を固めたいとき。",
+      "source": "https://github.com/BuzyOwl/song-video-director",
+      "license": "MIT",
+      "requires": [
+        "Node.js(npx)",
+        "Python 3(librosa、numpy — song_facts.py を使う場合)",
+        "ffmpeg"
+      ],
+      "costs": "none",
+      "signin": false,
+      "provides": { "skills": ["song-video-director"] },
+      "install": {
+        "commands": [
+          "npx skills add BuzyOwl/song-video-director -a claude-code --copy -y"
+        ]
+      },
+      "notes_ja": [
+        "このアプリのビート解析(.beats.json)と役割が近い song_facts.py が付属する。まずアプリのビート解析を使い、必要に応じて補助として参照する。",
+        "README の手順はフォルダの手動コピーだが、このカタログでは npx skills add で project 範囲にコピーする。コミット数が 1 件と新しいリポジトリ。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": [
+        "https://github.com/BuzyOwl/song-video-director",
+        "https://raw.githubusercontent.com/BuzyOwl/song-video-director/main/skill/song-video-director/SKILL.md",
+        "https://raw.githubusercontent.com/BuzyOwl/song-video-director/main/LICENSE"
+      ]
     }
   ],
   "watchlist": [
+    { "name": "lintsinghua/paint-mv-skills", "source": "https://github.com/lintsinghua/paint-mv-skills", "reason_ja": "水彩手描き風 MV のスキル(リポジトリ自体は MIT)だが、描画エンジン本体のコードは同梱されておらず、ライセンス未明記の JohnHeibel/PDoomVideo を初回実行時に fetch_upstream.mjs で外部クローンする仕組みのため保留。同じ水彩手描き風 MV は MIT の painted-animation が一覧にある。" },
+    { "name": "howseen-ai/claude-motion-design", "source": "https://github.com/howseen-ai/claude-motion-design", "reason_ja": "awesome-claude-video-skills で CAUTION 付き。一次ソースを確認したところ、SKILL.md が作者個人のローカルパス(~/Desktop/Howseen AI/...)前提で書かれており、付属の mcp21_client.py が ~/.config/21st.key を読んで 21st.dev API に送信するほか、Mixkit 等からのスクレイピングスクリプトを含むため見送り。" },
+    { "name": "ShuaiMXu/mv-skills-bundle", "source": "https://github.com/ShuaiMXu/mv-skills-bundle", "reason_ja": "6 個のスキル束(MIT)だが、ワークフローが有料の外部サービス(GPT Image 2 + Seedance 2.0 + Suno V5、README 記載で 1 本あたり約 162〜213 元)を前提としており、導入手順も ~/.claude/skills へのクローンとシンボリックリンク作成(user 範囲)のため保留。" },
     { "name": "fradser/dotclaude の music-to-video", "source": "https://github.com/FradSer/dotclaude", "reason_ja": "歌詞動画に向くという情報があるが、リポジトリのページ上で、music-to-video の存在・導入方法・必要なものを確認できなかった。確認できたら追加する。" },
     { "name": "bestagentkits/motion-video-skill", "source": "https://github.com/bestagentkits/motion-video-skill", "reason_ja": "ビートに合わせた動画を作れるが、Gemini と ElevenLabs の有料アカウント(multix CLI 経由)が必要で、npx --yes で外部パッケージを自動実行する。コミットが 2 件と新しい。MV には必須でないため、保留。" },
     { "name": "Sunwood-ai-labs/hyperframes-motion-reel-skill", "source": "https://github.com/Sunwood-ai-labs/hyperframes-motion-reel-skill", "reason_ja": "ビート同期のリールを作れるが、音楽をスクリプトで自動生成する用途で、ユーザーの曲を使う MV には合わない。導入が ~/.claude へのクローン(全体への導入)で、コミットも少ない。" },
