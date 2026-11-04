@@ -1,5 +1,5 @@
-// What the image and video libraries share: the numbering ledger (index.json) and the move-to-trash step.
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+// What the image and video libraries share: the numbering ledger (index.json).
+import { readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 // ---- numbering: every file gets an id (1, 2, 3, ...) so the user can say "image 3" to Claude ----
@@ -62,29 +62,4 @@ export function listNumbered(dir, listFn) {
     const idOf = new Map(items.map((item) => [item.name, item.id]));
     return files.map((file) => ({ ...file, id: idOf.get(file.name) }));
   });
-}
-
-/**
- * Moves files into `destDir` (nothing is deleted for good). Reports per file instead of stopping at the first error.
- * `pathOf(dir, name)` returns the file's path or null for a name that is not a plain library file.
- */
-export async function trashFiles(dir, destDir, names, { pathOf, max, Fail = Error }) {
-  if (!Array.isArray(names) || !names.length || names.length > max) throw new Fail(`names: 1-${max} file names expected`);
-  const moved = [];
-  const failed = [];
-  for (const name of new Set(names)) {
-    const from = pathOf(dir, name);
-    if (!from) {
-      failed.push({ name: String(name), error: "invalid name" });
-      continue;
-    }
-    try {
-      await mkdir(destDir, { recursive: true });
-      await rename(from, join(destDir, name));
-      moved.push(name);
-    } catch (err) {
-      failed.push({ name, error: err.code ?? err.message });
-    }
-  }
-  return { moved, failed };
 }

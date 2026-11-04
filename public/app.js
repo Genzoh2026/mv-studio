@@ -4,6 +4,7 @@ import { attachDropZone, uploadFiles } from "/upload.js";
 import { toast } from "/toast.js";
 import { createRail } from "/rail.js";
 import { settingsTool } from "/settings.js";
+import { trashTool } from "/trash.js";
 
 const $ = (id) => document.getElementById(id);
 const libraryBox = $("library");
@@ -101,7 +102,7 @@ createRail({
   rail: $("rail"),
   panel: $("rail-panel"),
   handle: $("rail-handle"),
-  tools: [settingsTool],
+  tools: [settingsTool, trashTool],
   onLayout: () => fit.fit(),
 });
 
@@ -178,7 +179,7 @@ async function moveSelectedToTrash() {
     toast(`移動できなかった PJ: ${body.failed.map((f) => `${f.name}(${f.error})`).join("、")}`, { key: "trash-failed", kind: "error" });
   }
   if (body.moved.length) {
-    toast(`${body.moved.length} 件を workspace\\_Trash へ移動しました(戻すときは PJs へ戻します)`, { key: "trash-done" });
+    toast(`${body.moved.length} 件を workspace\\_Trash へ移動しました(左端のゴミ箱から戻せます)`, { key: "trash-done" });
   }
   selected.clear();
   confirming = false;
@@ -280,9 +281,14 @@ async function refreshSongs() {
   const res = await fetch(`/api/songs?pj=${encodeURIComponent(viewing)}`);
   if (!res.ok) return;
   const songs = await res.json();
-  const key = viewing + JSON.stringify(songs.map((s) => [s.path ?? s.sunoId, s.mtime, s.analysis?.mtime ?? s.analysis?.error, s.timings?.mtime ?? s.timings?.error]));
+  shownSongs = songs;
+  const bases = new Set(songs.map((s) => s.base));
+  for (const base of selectedSongs) if (!bases.has(base)) selectedSongs.delete(base);
+  renderSongsBar();
+  const key = viewing + JSON.stringify(songs.map((s) => [s.base, s.path ?? s.sunoId, s.mtime, s.analysis?.mtime ?? s.analysis?.error, s.timings?.mtime ?? s.timings?.error]));
   if (key === songsKey) return;
   songsKey = key;
+  songChecks.clear();
   if (!songs.length) {
     return songsList.replaceChildren(note("曲はまだありません。ここへ曲(mp3・wav・m4a・ogg)をドラッグ&ドロップするか、左の Claude に「Suno で曲を作って、試聴用に保存して」と頼んでください。"));
   }
@@ -299,7 +305,73 @@ const songsAdd = Object.assign(document.createElement("button"), { type: "button
 const songsProgress = Object.assign(document.createElement("span"), { className: "meta" });
 const songsToolbar = Object.assign(document.createElement("div"), { className: "img-toolbar" });
 songsToolbar.append(songsAdd, songsProgress, songsPicker);
-songsBox.append(songsToolbar, songsList, songsDrop);
+const songsBar = Object.assign(document.createElement("div"), { className: "img-bar", hidden: true });
+songsBox.append(songsToolbar, songsBar, songsList, songsDrop);
+
+// ---- choosing songs for the trash (the list is not redrawn on a click, so a playing song keeps playing) ----
+const selectedSongs = new Set(); // base paths under Output, e.g. "song/x"
+let shownSongs = [];
+let lastPickedSong = -1;
+let confirmingSongs = false;
+const songChecks = new Map();    // base -> its checkbox, so a range click can tick the others without redrawing
+
+function pickSong(song, event) {
+  const index = shownSongs.findIndex((s) => s.base === song.base);
+  const range = event.shiftKey && lastPickedSong >= 0
+    ? shownSongs.slice(Math.min(lastPickedSong, index), Math.max(lastPickedSong, index) + 1)
+    : [song];
+  const on = songChecks.get(song.base).checked;
+  for (const s of range) {
+    if (on) selectedSongs.add(s.base); else selectedSongs.delete(s.base);
+    const box = songChecks.get(s.base);
+    if (box) { box.checked = on; box.closest(".song")?.classList.toggle("selected", on); }
+  }
+  lastPickedSong = index;
+  confirmingSongs = false;
+  renderSongsBar();
+}
+
+function renderSongsBar() {
+  const count = selectedSongs.size;
+  songsBar.hidden = count === 0;
+  if (!count) { confirmingSongs = false; return songsBar.replaceChildren(); }
+  const button = (textContent, onclick, className = "") => Object.assign(document.createElement("button"), { type: "button", textContent, onclick, className });
+  const text = (textContent) => Object.assign(document.createElement("span"), { textContent });
+  if (confirmingSongs) {
+    return songsBar.replaceChildren(
+      text(`${count} 曲を、付随ファイル(Suno 情報・解析・歌詞など)ごと workspace\\_Trash へ移動します。完全には削除されません。続けますか?`),
+      button("ごみ箱へ移動", trashSelectedSongs, "danger"),
+      button("やめる", () => { confirmingSongs = false; renderSongsBar(); }),
+    );
+  }
+  songsBar.replaceChildren(
+    text(`${count} 曲を選択中`),
+    button("ごみ箱へ…", () => { confirmingSongs = true; renderSongsBar(); }),
+    button("選択を解除", () => {
+      selectedSongs.clear();
+      confirmingSongs = false;
+      for (const box of songChecks.values()) { box.checked = false; box.closest(".song")?.classList.remove("selected"); }
+      renderSongsBar();
+    }),
+  );
+}
+
+async function trashSelectedSongs() {
+  const target = viewing;
+  const res = await fetch("/api/songs/trash", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ pj: target, bases: [...selectedSongs] }),
+  });
+  const answer = await res.json();
+  if (!res.ok) return toast(answer.error, { key: "song-trash", kind: "error" });
+  // The server names a moved song by its file stem; drop every selected path that ends in one.
+  for (const stem of answer.moved) for (const base of [...selectedSongs]) if (base === stem || base.endsWith(`/${stem}`)) selectedSongs.delete(base);
+  confirmingSongs = false;
+  if (answer.moved.length) toast(`${answer.moved.length} 曲をゴミ箱へ移動しました(左端のゴミ箱から戻せます)`, { key: "song-trash" });
+  if (answer.failed.length) toast(`移動できませんでした: ${answer.failed.map((f) => `${f.name}(${f.error})`).join("、")}`, { key: "song-trash-failed", kind: "error" });
+  if (viewing === target) { songsKey = null; await refreshSongs(); }
+}
 
 async function addSongs(files) {
   const target = viewing;
@@ -319,9 +391,18 @@ function songCard(song) {
   el.className = "song";
   const head = document.createElement("div");
   head.className = "song-head";
+  const pick = document.createElement("input");
+  pick.type = "checkbox";
+  pick.className = "song-pick";
+  pick.title = "選択(Shift で範囲選択)";
+  pick.setAttribute("aria-label", `${song.title} を選択`);
+  pick.checked = selectedSongs.has(song.base);
+  el.classList.toggle("selected", pick.checked);
+  songChecks.set(song.base, pick);
+  pick.addEventListener("click", (event) => pickSong(song, event));
   const title = document.createElement("h2");
   title.textContent = song.title;
-  head.append(title);
+  head.append(pick, title);
   if (!song.path) {
     const badge = document.createElement("span");
     badge.className = "badge";
@@ -528,6 +609,10 @@ function showTab(next) {
   for (const button of document.querySelectorAll("#tabs button")) button.classList.toggle("on", button.dataset.tab === next);
   for (const [id, box] of Object.entries(tabBoxes)) box.hidden = id !== next;
   songsKey = null;
+  selectedSongs.clear();
+  confirmingSongs = false;
+  lastPickedSong = -1;
+  renderSongsBar();
   libraries.image.reset();
   libraries.video.reset();
   refreshActiveTab();

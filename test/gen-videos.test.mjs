@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cleanGen, readGen } from "../gen.mjs";
-import { VideoError, listNumberedVideos, trashVideos, videoPath } from "../videos.mjs";
+import { listNumberedVideos, videoPath } from "../videos.mjs";
 import { listNumberedImages } from "../images.mjs";
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
@@ -85,18 +85,5 @@ test("an image with a sidecar carries its provenance, one without is the user's"
     const byName = Object.fromEntries((await listNumberedImages(dir)).map((i) => [i.name, i]));
     assert.equal(byName["made.png"].gen.method.tool, "comfyui");
     assert.equal(byName["mine.png"].gen, null);
-  });
-});
-
-test("trashVideos moves videos and refuses bad names", async () => {
-  await scratch(async (root) => {
-    const dir = join(root, "video");
-    const trash = join(root, "_Trash");
-    await import("node:fs/promises").then((fs) => fs.mkdir(dir));
-    await writeFile(join(dir, "a.mp4"), "x");
-    const result = await trashVideos(dir, trash, ["a.mp4", "../a.mp4"]);
-    assert.deepEqual(result.moved, ["a.mp4"]);
-    assert.equal(result.failed[0].error, "invalid name");
-    await assert.rejects(trashVideos(dir, trash, []), VideoError);
   });
 });

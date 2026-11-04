@@ -9,8 +9,9 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { readAnalysisSummary, readTimingsSummary } from "./analysis.mjs";
 import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
-import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listNumberedImages, saveImage, trashImages } from "./images.mjs";
-import { listNumberedVideos, trashVideos, videoContentType, videoPath } from "./videos.mjs";
+import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listNumberedImages, saveImage } from "./images.mjs";
+import { listNumberedVideos, videoContentType, videoPath } from "./videos.mjs";
+import { deleteItems, emptyTrash, listTrash, restoreItems, trashMediaByName, trashSongsByBase } from "./trash.mjs";
 import { AudioError, MAX_AUDIO_BYTES, saveAudioStream } from "./audio.mjs";
 import { SessionLimitError, createSessions } from "./sessions.mjs";
 import { DOCS_URL, detectClaude, installCommands, installGuideText } from "./claude-cli.mjs";
@@ -52,6 +53,7 @@ const STATIC = {
   "/drafts.js": ["public/drafts.js", "text/javascript"],
   "/media-library.js": ["public/media-library.js", "text/javascript"],
   "/upload.js": ["public/upload.js", "text/javascript"],
+  "/trash.js": ["public/trash.js", "text/javascript"],
   "/toast.js": ["public/toast.js", "text/javascript"],
   "/rail.js": ["public/rail.js", "text/javascript"],
   "/settings.js": ["public/settings.js", "text/javascript"],
@@ -190,6 +192,8 @@ async function* walk(dir, depth = 0) {
     if (entry.name.startsWith(".")) continue;
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
+      // Stems belong to their song (shown under it), so they are not songs of their own.
+      if (entry.name.endsWith(".stems")) continue;
       if (depth < MAX_DEPTH) yield* walk(full, depth + 1);
     } else yield full;
   }
@@ -270,12 +274,14 @@ async function listSongs(pj) {
   for (const base of [...local.map((s) => s.base), ...previews.map((p) => p.base)]) {
     analysed.set(base, { analysis: await readAnalysisSummary(base), timings: await readTimingsSummary(base) });
   }
+  // The base path under Output ("song/x") names a song for the trash: everything beside it goes along.
+  const relBase = (base) => base.slice(output.length + 1).split(sep).join("/");
   const ready = local.map(({ base, lyrics, ...rest }) => {
     const preview = previewOf.get(base);
     const detail = preview?.detail ?? { style: null, duration: null, kind: null, createdAt: null, settings: [], lyrics: null };
-    return { ...rest, sunoId: preview?.sunoId ?? null, cover: preview?.cover ?? null, ...analysed.get(base), detail: { ...detail, lyrics: lyrics ?? detail.lyrics } };
+    return { ...rest, base: relBase(base), sunoId: preview?.sunoId ?? null, cover: preview?.cover ?? null, ...analysed.get(base), detail: { ...detail, lyrics: lyrics ?? detail.lyrics } };
   });
-  const pending = previews.filter((p) => !downloaded.has(p.base)).map(({ base, ...rest }) => ({ ...rest, name: basename(base), ...analysed.get(base) }));
+  const pending = previews.filter((p) => !downloaded.has(p.base)).map(({ base, ...rest }) => ({ ...rest, base: relBase(base), name: basename(base), ...analysed.get(base) }));
   return [...ready, ...pending].sort((a, b) => b.mtime - a.mtime);
 }
 
@@ -320,13 +326,11 @@ async function readBinary(req, limit) {
   return Buffer.concat(chunks);
 }
 
-/** Moves images to workspace\_Trash\images\<project>__<time>\ so a mistaken delete can be undone by hand. */
+/** Moves images (with their .gen.json) to the trash, from where the trash screen can restore them. */
 async function trashProjectImages(pjName, names) {
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const dir = imageDir(pjDir(pjName));
-  const result = await trashImages(dir, join(TRASH, "images", `${pjName}__${stamp}`), names);
+  const result = await trashMediaByName({ trashRoot: TRASH, pjName, pjDir: pjDir(pjName), kind: "image", names, isMedia: (name) => Boolean(imagePath("", name)) });
   // Retire the moved files' ids now, so a new file with the same name cannot inherit one.
-  await listNumberedImages(dir);
+  await listNumberedImages(imageDir(pjDir(pjName)));
   return result;
 }
 
@@ -355,12 +359,10 @@ async function serveImage(res, url) {
 
 const videoDir = (pjDirPath) => join(pjDirPath, "Output", "video");
 
-/** Moves videos to workspace\_Trash\videos\<project>__<time>\ (same idea as images). */
+/** Moves videos (with their .gen.json) to the trash (same idea as images). */
 async function trashProjectVideos(pjName, names) {
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const dir = videoDir(pjDir(pjName));
-  const result = await trashVideos(dir, join(TRASH, "videos", `${pjName}__${stamp}`), names);
-  await listNumberedVideos(dir);
+  const result = await trashMediaByName({ trashRoot: TRASH, pjName, pjDir: pjDir(pjName), kind: "video", names, isMedia: (name) => Boolean(videoPath("", name)) });
+  await listNumberedVideos(videoDir(pjDir(pjName)));
   return result;
 }
 
@@ -556,6 +558,26 @@ const server = createServer(async (req, res) => {
       if (!dir) return json(res, 400, { error: "bad project" });
       if (Number(req.headers["content-length"]) > MAX_AUDIO_BYTES) throw new AudioError(`too large (max ${MAX_AUDIO_BYTES / 1024 / 1024} MB)`);
       return json(res, 200, { name: await saveAudioStream(join(dir, "Output", "song"), url.searchParams.get("name"), req) });
+    }
+    if (url.pathname === "/api/songs/trash" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      const body = await readBody(req, MAX_DRAFT_BODY);
+      if (!(await existingPjDir(body.pj))) return json(res, 400, { error: "bad project" });
+      return json(res, 200, await trashSongsByBase({ trashRoot: TRASH, pjName: body.pj, pjDir: pjDir(body.pj), bases: body.bases }));
+    }
+    if (url.pathname === "/api/trash" && req.method === "GET") return json(res, 200, await listTrash(TRASH));
+    if (url.pathname === "/api/trash/restore" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      return json(res, 200, await restoreItems({ trashRoot: TRASH, pjsRoot: PJS, items: (await readBody(req, MAX_DRAFT_BODY)).items, validPjName: (name) => PJ_NAME.test(name) }));
+    }
+    // The only places where anything is deleted for good: the trash screen, after the user confirmed there.
+    if (url.pathname === "/api/trash/delete" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      return json(res, 200, await deleteItems({ trashRoot: TRASH, items: (await readBody(req, MAX_DRAFT_BODY)).items }));
+    }
+    if (url.pathname === "/api/trash/empty" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      return json(res, 200, await emptyTrash(TRASH));
     }
     if (url.pathname === "/api/songs") {
       if (!pjDir(url.searchParams.get("pj"))) return json(res, 400, { error: "bad project" });

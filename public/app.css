@@ -191,3 +191,16 @@ body.rail-collapsed #rail-handle { display: block; }
 .gen-detail dl.info { margin: 0 0 4px; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
 .gen-detail dl.info dt { color: var(--dim); }
 .gen-detail dl.info dd { margin: 0; overflow-wrap: anywhere; }
+.song.selected { border-color: #d9534f; }
+.song-pick { width: 18px; height: 18px; flex: none; cursor: pointer; accent-color: #d9534f; }
+#songs .img-toolbar, #songs .img-bar { margin-bottom: 8px; }
+.trash-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.trash-bar p { flex: 1 1 100%; margin: 0; }
+.trash-bar button { background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; cursor: pointer; }
+.trash-bar button.danger { background: #7a2e2e; border-color: #a54343; }
+.trash-bar button:disabled { opacity: 0.4; cursor: default; }
+.trash-entry { margin: 10px 0; }
+.trash-entry h4 { margin: 0 0 4px; font-size: 12px; color: var(--dim); font-weight: 600; }
+.trash-item { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; }
+.trash-item .trash-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.trash-item input { accent-color: #4a78a8; }

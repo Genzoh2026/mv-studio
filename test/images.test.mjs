@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ImageError, MAX_IMAGE_BYTES, cleanStem, imagePath, listImages, listNumberedImages, saveImage, sniffImage, trashImages } from "../images.mjs";
+import { ImageError, MAX_IMAGE_BYTES, cleanStem, imagePath, listImages, listNumberedImages, saveImage, sniffImage } from "../images.mjs";
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 const JPG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]);
@@ -68,22 +68,6 @@ test("listImages ignores other files and folders, and a missing folder is empty"
     assert.equal(only.name, "a.png");
     assert.equal(only.size, PNG.length);
     assert.deepEqual(rest, []);
-  });
-});
-
-test("trashImages moves valid files, keeps bytes, and reports bad names without stopping", async () => {
-  await scratch(async (root) => {
-    const dir = join(root, "image");
-    const trash = join(root, "_Trash", "images", "pj__stamp");
-    const name = await saveImage(dir, "keep.png", JPG);
-    await writeFile(join(root, "outside.png"), PNG);
-    const result = await trashImages(dir, trash, [name, "../outside.png", "missing.png", name]);
-    assert.deepEqual(result.moved, [name]);
-    assert.deepEqual(result.failed.map((f) => f.name).sort(), ["../outside.png", "missing.png"]);
-    assert.ok(existsSync(join(root, "outside.png")));
-    assert.ok(!existsSync(join(dir, name)));
-    assert.deepEqual(await readFile(join(trash, name)), JPG);
-    await assert.rejects(trashImages(dir, trash, []), ImageError);
   });
 });
 

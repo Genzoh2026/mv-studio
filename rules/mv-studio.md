@@ -7,6 +7,9 @@ songs on the right. The current directory is ONE MV project. These rules are sup
 
 - Everything you produce goes under `Output/<kind>/` (songs: `Output/song/`). Drafts go under `Drafts/`.
   The app only shows `Output/` and `Drafts/`; do not put assets anywhere else.
+- **Never delete, trash or empty anything yourself** (songs, images, videos, `.gen.json`, stems, the trash). The user
+  removes things in the app: its trash moves a file together with everything beside it, and only the user can delete
+  from the trash for good. If something looks unneeded, say so and let the user decide. Do not touch `_Trash`.
 - **Images** all live in `Output/image/` (png, jpg, webp or gif), whoever made them. **Videos** (cuts and finished
   MVs) all live in `Output/video/` (mp4 with H.264/AAC, or webm; the browser must be able to play them).
   Never put an image in the video library or the other way round.

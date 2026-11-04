@@ -112,7 +112,7 @@ export function createMediaLibrary({ root, getProject, kind, openOther }) {
     if (!res.ok) return toast(answer.error, { key: `${kind}-trash`, kind: "error" });
     for (const name of answer.moved) selected.delete(name);
     confirming = false;
-    if (answer.moved.length) toast(`${answer.moved.length} 件を workspace\\_Trash\\${kind}s へ移動しました(戻すときは Output\\${kind} へ戻します)`, { key: `${kind}-trash` });
+    if (answer.moved.length) toast(`${answer.moved.length} 件をゴミ箱へ移動しました(左端のゴミ箱から戻せます)`, { key: `${kind}-trash` });
     if (answer.failed.length) toast(`移動できませんでした: ${answer.failed.map((f) => `${f.name}(${f.error})`).join("、")}`, { key: `${kind}-trash-failed`, kind: "error" });
     await refresh(true);
   }

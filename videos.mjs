@@ -3,12 +3,9 @@
 import { readdir, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { attachGen } from "./gen.mjs";
-import { listNumbered, trashFiles } from "./library-core.mjs";
+import { listNumbered } from "./library-core.mjs";
 
-export const MAX_TRASH_VIDEOS = 200;
 const CONTENT_TYPES = new Map([[".mp4", "video/mp4"], [".webm", "video/webm"]]);
-
-export class VideoError extends Error {}
 
 /** The file's path if `name` is a plain video file name inside `dir`, else null. */
 export function videoPath(dir, name) {
@@ -35,8 +32,6 @@ export async function listVideos(dir) {
   }
   return videos.sort((a, b) => b.mtime - a.mtime || a.name.localeCompare(b.name));
 }
-
-export const trashVideos = (dir, destDir, names) => trashFiles(dir, destDir, names, { pathOf: videoPath, max: MAX_TRASH_VIDEOS, Fail: VideoError });
 
 /** The folder's videos with their ids and provenance (<name>.gen.json). */
 export const listNumberedVideos = (dir) => listNumbered(dir, listVideos).then((videos) => attachGen(dir, videos));

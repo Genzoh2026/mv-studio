@@ -3,10 +3,9 @@
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { attachGen } from "./gen.mjs";
-import { listNumbered, trashFiles } from "./library-core.mjs";
+import { listNumbered } from "./library-core.mjs";
 
 export const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
-export const MAX_TRASH_IMAGES = 200;
 const MAX_STEM = 100;
 const MAX_SUFFIX = 999;
 // SVG is left out on purpose: it can carry scripts.
@@ -79,9 +78,6 @@ export async function listImages(dir) {
   }
   return images.sort((a, b) => b.mtime - a.mtime || a.name.localeCompare(b.name));
 }
-
-/** Moves images into `destDir` (nothing is deleted for good). Reports per file instead of stopping at the first error. */
-export const trashImages = (dir, destDir, names) => trashFiles(dir, destDir, names, { pathOf: imagePath, max: MAX_TRASH_IMAGES, Fail: ImageError });
 
 /** The folder's images with their ids and, when Claude wrote one, their provenance (<name>.gen.json). */
 export const listNumberedImages = (dir) => listNumbered(dir, listImages).then((images) => attachGen(dir, images));
