@@ -19,6 +19,10 @@ const post = (path, payload = {}) => fetch(path, { method: "POST", headers: { "c
 const cancelJob = (id) => post("/api/jobs/cancel", { id });
 const titleOf = (base) => base.split("/").pop();
 const isActive = (job) => job.state === "running" || job.state === "queued";
+// A finished job stays in the strip a few seconds: some take less than a second and would never be seen.
+const RECENT_DONE_MS = 6000;
+const isRecent = (job) => job.state === "done" && Boolean(job.finishedAt) && Date.now() - job.finishedAt < RECENT_DONE_MS;
+const tookText = (job) => (job.startedAt && job.finishedAt ? `(${((job.finishedAt - job.startedAt) / 1000).toFixed(1)} 秒)` : "");
 
 /** @param {{root: HTMLElement}} options */
 export function createJobBar({ root }) {
@@ -47,6 +51,12 @@ export function createJobBar({ root }) {
   function render(jobs, install) {
     const active = jobs.filter(isActive);
     const installing = install?.state === "running";
+    const recent = jobs.filter(isRecent).sort((a, b) => b.finishedAt - a.finishedAt)[0];
+    if (!active.length && !installing && recent) {
+      root.hidden = false;
+      return root.replaceChildren(h("div", { className: "job-item done" },
+        h("span", { className: "job-text", textContent: `✓ ${KIND_ICONS[recent.kind]} ${KIND_LABELS[recent.kind]}が終わりました 「${titleOf(recent.base)}」 ${tookText(recent)}${recent.then ? " → 続けてビート解析" : ""}` })));
+    }
     if (!active.length && !installing) {
       root.hidden = true;
       return root.replaceChildren();
@@ -83,9 +93,10 @@ export function createJobBar({ root }) {
       announce(jobs, install);
       render(jobs, install);
     } catch { /* the server may be restarting: keep what is shown and try again */ }
-    timer = setTimeout(tick, jobs.some(isActive) || install?.state === "running" ? ACTIVE_POLL_MS : IDLE_POLL_MS);
+    timer = setTimeout(tick, jobs.some((job) => isActive(job) || isRecent(job)) || install?.state === "running" ? ACTIVE_POLL_MS : IDLE_POLL_MS);
   }
 
+  document.addEventListener("jobs-changed", () => tick());
   tick();
   return { refresh: tick };
 }

@@ -232,3 +232,5 @@ body.rail-collapsed #rail-handle { display: block; }
 #job-bar .job-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c9ced6; }
 #job-bar button { background: transparent; color: var(--dim); border: 1px solid var(--line); border-radius: 4px; font: inherit; font-size: 11px; padding: 0 8px; cursor: pointer; }
 #job-bar button:hover { color: #e6e8eb; border-color: #8b93a1; }
+.job.done { color: #6fd38c; }
+#job-bar .job-item.done .job-text { color: #6fd38c; }

@@ -4,6 +4,10 @@
 import { toast } from "/toast.js";
 
 const KIND_LABELS = { separate: "分離", beats: "ビート解析" };
+// A job can finish in under a second; its result line stays this long so it is not missed.
+const RECENT_DONE_MS = 8000;
+const justFinished = (job) => job.state === "done" && Boolean(job.finishedAt) && Date.now() - job.finishedAt < RECENT_DONE_MS;
+const tookText = (job) => (job.startedAt && job.finishedAt ? `(${((job.finishedAt - job.startedAt) / 1000).toFixed(1)} 秒)` : "");
 // The settings tool is the first button of the left rail; opening it shows the one-button setup.
 // It opens the panel if needed and brings the audio tools section (with the setup button) into view.
 const openSettings = () => {
@@ -67,6 +71,7 @@ export function createSongTools({ getProject }) {
     dismissed.delete(answer.id);
     jobs = [...jobs.filter((job) => job.id !== answer.id), answer];
     renderLine(song.base);
+    document.dispatchEvent(new CustomEvent("jobs-changed")); // the bottom bar looks right away instead of at its next check
     toast(then ? `「${song.title}」を分離して、続けてビート解析します。画面を閉じても進みます。` : `「${song.title}」の${KIND_LABELS[kind]}を始めました。終わるとここに結果が出ます。`, { key: "song-tool" });
   }
 
@@ -103,13 +108,15 @@ export function createSongTools({ getProject }) {
   function renderLine(base) {
     const el = lines.get(base);
     if (!el) return;
-    const shown = jobsOf(base).filter((job) => !dismissed.has(job.id) && (["queued", "running", "error"].includes(job.state)));
+    const shown = jobsOf(base).filter((job) => !dismissed.has(job.id) && (["queued", "running", "error"].includes(job.state) || justFinished(job)));
     const ask = confirming.get(base);
     el.hidden = shown.length === 0 && !ask;
     el.replaceChildren(...(ask ? [confirmRow(ask)] : []), ...shown.map((job) => {
       const label = KIND_LABELS[job.kind];
       const row = h("div", { className: `job ${job.state}` });
-      if (job.state === "error") {
+      if (job.state === "done") {
+        row.append(h("span", { textContent: `✓ ${label}が終わりました ${tookText(job)}${job.then ? "。続けてビート解析します" : ""}` }));
+      } else if (job.state === "error") {
         row.append(h("span", { textContent: `${label}に失敗しました: ${job.error}` }),
           h("button", { type: "button", textContent: "✕", title: "閉じる", onclick: async () => { dismissed.add(job.id); await post("/api/jobs/dismiss", { id: job.id }); renderLine(base); } }));
       } else {
