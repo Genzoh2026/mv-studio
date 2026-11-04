@@ -1,6 +1,7 @@
 // The slim tool bar on the far left. Each tool is one icon that opens a panel beside the bar; the bar itself can be
 // folded away (a small handle stays at the edge). To add a tool, add an entry to `tools` in app.js:
-//   { id, icon, title, open(body): (() => void) | void }   // open() fills `body`; its return value is a cleanup
+//   { id, icon, title, position?: "bottom", open(body): (() => void) | void }   // open() fills `body`; its return value is a cleanup
+// `position: "bottom"` puts the button at the foot of the bar, away from the others (used for the power tool).
 const STORAGE_KEY = "mv-studio:rail-collapsed";
 
 /**
@@ -39,7 +40,8 @@ export function createRail({ rail, panel, handle, tools, onLayout }) {
     button.setAttribute("aria-label", tool.title);
     button.addEventListener("click", () => (openId === tool.id ? closePanel() : openPanel(tool)));
     buttons.set(tool.id, button);
-    rail.querySelector(".rail-tools").append(button);
+    button.dataset.tool = tool.id;
+    rail.querySelector(tool.position === "bottom" ? ".rail-tools-bottom" : ".rail-tools:not(.rail-tools-bottom)").append(button);
   }
 
   function setCollapsed(collapsed) {

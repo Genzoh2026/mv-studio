@@ -11,7 +11,7 @@ const tookText = (job) => (job.startedAt && job.finishedAt ? `(${((job.finishedA
 // The settings tool is the first button of the left rail; opening it shows the one-button setup.
 // It opens the panel if needed and brings the audio tools section (with the setup button) into view.
 const openSettings = () => {
-  const rail = document.querySelector(".rail-btn");
+  const rail = document.querySelector('.rail-btn[data-tool="settings"]');
   if (rail && !rail.classList.contains("on")) rail.click();
   setTimeout(() => {
     const heading = document.getElementById("audio-tools-heading");

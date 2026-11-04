@@ -7,6 +7,7 @@ import { toast } from "/toast.js";
 import { createRail } from "/rail.js";
 import { settingsTool } from "/settings.js";
 import { trashTool } from "/trash.js";
+import { powerTool } from "/power.js";
 
 const $ = (id) => document.getElementById(id);
 const libraryBox = $("library");
@@ -104,7 +105,7 @@ createRail({
   rail: $("rail"),
   panel: $("rail-panel"),
   handle: $("rail-handle"),
-  tools: [settingsTool, trashTool],
+  tools: [settingsTool, trashTool, powerTool],
   onLayout: () => fit.fit(),
 });
 
@@ -594,7 +595,7 @@ let claudeReady = true;
 const RAIL_POLL_MS = 10_000;
 function setClaudeStatus(claude) {
   claudeReady = !claude || claude.found;
-  document.querySelector(".rail-btn")?.classList.toggle("alert", !claudeReady);
+  document.querySelector('.rail-btn[data-tool="settings"]')?.classList.toggle("alert", !claudeReady);
 }
 document.addEventListener("claude-status", (event) => setClaudeStatus(event.detail));
 async function pollClaudeStatus() {
