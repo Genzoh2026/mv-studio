@@ -47,7 +47,21 @@ export async function listStems(stemBase, outputRoot) {
 export function createSongJobs({ tools }) {
   const manager = createJobs({ run: (job, ctx) => runJob(job, ctx) });
 
-  async function runJob(job, { signal, progress }) {
+  /** A Python "No module named X" is not something the user can act on; say what to do. */
+  const explain = (err) => {
+    const missing = /No module named '([\w.]+)'/.exec(err.message)?.[1];
+    return missing ? new Error(`Python に ${missing} が入っていません。左端の ⚙ 設定 > 音声ツール の手順で入れて、「再確認」を押してください。`) : err;
+  };
+
+  async function runJob(job, ctx) {
+    try {
+      await runJobUnchecked(job, ctx);
+    } catch (err) {
+      throw explain(err);
+    }
+  }
+
+  async function runJobUnchecked(job, { signal, progress }) {
     const { file, stemBase } = job.paths;
     const id = randomUUID().slice(0, 8);
     if (job.kind === "separate") {

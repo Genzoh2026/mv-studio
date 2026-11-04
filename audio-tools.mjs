@@ -15,11 +15,11 @@ const SETTINGS_DIR = ".mv-studio";
 const asCommand = (command, pre = []) => ({ command, pre });
 
 /** Runs a command to completion and returns its stdout, or null when it cannot run or fails. */
-function capture(command, args, timeoutMs = PROBE_TIMEOUT_MS) {
+function capture(command, args, timeoutMs = PROBE_TIMEOUT_MS, env = process.env) {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(command, args, { windowsHide: true, stdio: ["ignore", "pipe", "ignore"] });
+      child = spawn(command, args, { windowsHide: true, stdio: ["ignore", "pipe", "ignore"], env });
     } catch {
       return resolve(null);
     }
@@ -71,7 +71,7 @@ export function createAudioTools({ workspace, toolsDir, env = process.env, platf
 
   /** Asks one Python what it has (tools/probe.py). Null when it does not run. */
   async function probe(candidate) {
-    const out = await capture(candidate.command, [...candidate.pre, join(toolsDir, "probe.py")]);
+    const out = await capture(candidate.command, [...candidate.pre, join(toolsDir, "probe.py")], PROBE_TIMEOUT_MS, { ...process.env, ...env });
     try {
       return out ? { ...JSON.parse(out.trim().split("\n").pop()), ...candidate } : null;
     } catch {
@@ -83,7 +83,8 @@ export function createAudioTools({ workspace, toolsDir, env = process.env, platf
     const settings = await readSettings();
     // The most capable Python wins (Demucs, then numpy, then one that merely runs); on a tie, the earlier candidate:
     // the user's own choice and the workspace environment come before whatever the system has.
-    const score = (found) => (found.demucs ? 2 : 0) + (found.numpy ? 1 : 0);
+    // A Demucs that is installed but fails to load still beats none: it is one missing package away from working.
+    const score = (found) => (found.demucs ? (found.demucs_error ? 1 : 2) : 0) + (found.numpy ? 1 : 0);
     let best = null;
     for (const candidate of await candidates(settings)) {
       const found = await probe(candidate);
@@ -95,13 +96,18 @@ export function createAudioTools({ workspace, toolsDir, env = process.env, platf
     const python = best ? { found: true, command: best.command, pre: best.pre, version: best.python } : { found: false };
     const numpy = best?.numpy ?? null;
     const demucs = best?.demucs ?? null;
+    const demucsError = best?.demucs_error ?? null;
+    const cuda = Boolean(best?.cuda);
+    // An NVIDIA GPU is only worth mentioning if PyTorch cannot use it yet.
+    const gpuOut = cuda ? null : await capture("nvidia-smi", ["--query-gpu=name", "--format=csv,noheader"], 8000);
+    const gpu = gpuOut?.trim().split("\n")[0]?.trim() || null;
     cached = {
       python: { found: python.found, version: python.version ?? null, where: python.found ? [python.command, ...python.pre].join(" ") : null },
-      numpy, demucs, cuda: Boolean(best?.cuda), ffmpeg,
+      numpy, demucs, demucsError, torch: best?.torch ?? null, cuda, gpu, ffmpeg,
       model: settings.model,
       pythonPath: settings.pythonPath,
-      ready: { beats: python.found && Boolean(numpy) && ffmpeg.found, separate: python.found && Boolean(demucs) && ffmpeg.found },
-      install: installHelp({ python, numpy, demucs, ffmpeg, workspace, platform, venvPython }),
+      ready: { beats: python.found && Boolean(numpy) && ffmpeg.found, separate: python.found && Boolean(demucs) && !demucsError && ffmpeg.found },
+      install: installHelp({ python, numpy, demucs, demucsError, gpu, cuda, ffmpeg, workspace, platform, venvPython }),
       _run: python.found ? { command: python.command, pre: python.pre } : null,
     };
     return cached;
@@ -176,11 +182,14 @@ export function createAudioTools({ workspace, toolsDir, env = process.env, platf
 const lastLine = (text) => text.trim().split("\n").filter(Boolean).pop()?.slice(0, 300) ?? "";
 
 /** Commands for what is missing, in the order to run them. Shown to the user, never run by the app. */
-export function installHelp({ python, numpy, demucs, ffmpeg, workspace, platform, venvPython }) {
+export function installHelp({ python, numpy, demucs, demucsError = null, gpu = null, cuda = false, ffmpeg, workspace, platform, venvPython }) {
   const steps = [];
   const win = platform === "win32";
+  const quote = (p) => (p.includes(" ") ? `"${p}"` : p);
+  // The Python that will run Demucs: the one found, or the workspace environment the steps below create.
+  const runner = python.found && demucs ? [python.command, ...(python.pre ?? [])].map(quote).join(" ") : `"${venvPython}"`;
   if (!python.found) {
-    steps.push({ label: "Python 3 を入れる", command: win ? "winget install Python.Python.3.12" : platform === "darwin" ? "brew install python" : "sudo apt install python3 python3-venv", note: "入れたら、アプリの「再確認」を押します(PATH は起動時に読み込まれるので、見つからなければアプリを再起動してください)" });
+    steps.push({ label: "Python 3 を入れる", command: win ? "winget install Python.Python.3.12" : platform === "darwin" ? "brew install python" : "sudo apt install python3 python3-venv", note: "入れたら、アプリの「再確認」を押します(PATH は起動時に読み込まれるので、見つからなければアプリを再起動してください)。PyTorch が対応するのは Python 3.9〜3.12 ごろまでです" });
   }
   if (!ffmpeg.found) {
     steps.push({ label: "ffmpeg を入れる", command: win ? "winget install Gyan.FFmpeg" : platform === "darwin" ? "brew install ffmpeg" : "sudo apt install ffmpeg" });
@@ -189,10 +198,28 @@ export function installHelp({ python, numpy, demucs, ffmpeg, workspace, platform
     const venv = join(workspace, SETTINGS_DIR, "venv");
     steps.push(
       { label: "専用の環境を作る(ワークスペースの中。他の Python を汚しません)", command: `${win ? "python" : "python3"} -m venv "${venv}"` },
-      { label: "Demucs を入れる(曲の分離に必要。数 GB のダウンロードがあります)", command: `"${venvPython}" -m pip install demucs`, note: "GPU(NVIDIA)で速くするには、PyTorch の CUDA 版が必要です: https://pytorch.org/get-started/locally/" },
+      // numpy is listed on purpose: Demucs needs it but does not install it on most systems.
+      { label: "Demucs を入れる(曲の分離に必要。数 GB のダウンロードがあります)", command: `"${venvPython}" -m pip install demucs numpy` },
     );
+  } else if (demucsError) {
+    // Installed but it does not load: usually one package that Demucs needs and does not install itself.
+    const missing = /No module named '([\w]+)/.exec(demucsError)?.[1];
+    steps.push(missing
+      ? { label: `Demucs が読み込めません(${missing} がありません)。足りないものを入れる`, command: `${runner} -m pip install ${Object.hasOwn(PIP_NAMES, missing) ? PIP_NAMES[missing] : missing}`, note: demucsError }
+      : { label: "Demucs が読み込めません。入れ直す", command: `${runner} -m pip install --upgrade --force-reinstall demucs numpy`, note: demucsError });
   } else if (!numpy) {
-    steps.push({ label: "numpy を入れる(ビート解析に必要)", command: `${[python.command, ...(python.pre ?? [])].map((p) => (p.includes(" ") ? `"${p}"` : p)).join(" ")} -m pip install numpy` });
+    steps.push({ label: "numpy を入れる(ビート解析に必要)", command: `${runner} -m pip install numpy` });
+  }
+  // The default PyTorch from PyPI is the CPU build on Windows and macOS, so a GPU stays idle until it is swapped.
+  if (gpu && !cuda) {
+    steps.push({
+      label: `GPU(${gpu})で速くする: GPU 版の PyTorch に入れ替える(約 3 GB。任意)`,
+      command: `${runner} -m pip install --upgrade --force-reinstall --no-deps torch --index-url https://download.pytorch.org/whl/cu126`,
+      note: "PyTorch 公式の手順です(https://pytorch.org/get-started/locally/)。入れ替えたら「再確認」で「GPU が使えます」になれば成功です。GPU がなくても分離は動きます(CPU は遅めです)。",
+    });
   }
   return steps;
 }
+
+// A few packages are installed under another name than they are imported as.
+const PIP_NAMES = { yaml: "pyyaml", cv2: "opencv-python", sklearn: "scikit-learn" };

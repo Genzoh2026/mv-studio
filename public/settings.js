@@ -199,9 +199,13 @@ export const settingsTool = {
       audioBox.replaceChildren(
         mark(audio.python.found, audio.python.found ? `Python ${audio.python.version}(${audio.python.where})` : "Python が見つかりません"),
         mark(Boolean(audio.numpy), audio.numpy ? `numpy ${audio.numpy}(ビート解析)` : "numpy がありません(ビート解析に必要)"),
-        mark(Boolean(audio.demucs), audio.demucs ? `Demucs ${audio.demucs}(曲の分離)` : "Demucs がありません(曲の分離に必要)"),
+        mark(Boolean(audio.demucs) && !audio.demucsError, !audio.demucs ? "Demucs がありません(曲の分離に必要)" : audio.demucsError ? `Demucs ${audio.demucs} は入っていますが、動きません: ${audio.demucsError}` : `Demucs ${audio.demucs}(曲の分離)`),
         mark(audio.ffmpeg.found, audio.ffmpeg.found ? `ffmpeg ${audio.ffmpeg.version}` : "ffmpeg が見つかりません"),
-        h("p", { className: "meta", textContent: audio.cuda ? "GPU(CUDA)が使えます。分離は速くなります。" : "GPU は使っていません(CPU で動きます。曲 1 分で数十秒〜数分)。" }),
+        h("p", { className: audio.gpu ? "bad" : "meta", textContent: audio.cuda
+          ? `GPU で分離します(PyTorch ${audio.torch ?? ""} / CUDA)。`
+          : audio.gpu
+            ? `NVIDIA GPU(${audio.gpu})がありますが、この環境の PyTorch は ${audio.torch ?? "?"}(GPU 非対応の版)で、CPU で動きます。下の手順で GPU 版に入れ替えると速くなります(任意)。`
+            : "GPU は使っていません(CPU で動きます。曲 1 分で数十秒〜数分)。" }),
         ...audio.install.flatMap((step) => [
           h("p", { className: "meta", textContent: step.label }),
           h("div", { className: "cmd" }, h("pre", { textContent: step.command }), copyButton(step.command)),
