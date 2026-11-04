@@ -23,7 +23,7 @@ export function createSessions({ command, args, env }) {
     if (sessions.size >= MAX_SESSIONS) {
       throw new SessionLimitError(`Up to ${MAX_SESSIONS} sessions can run at once. End one from the library first.`);
     }
-    const term = pty.spawn(command, typeof args === "function" ? args() : args, { name: "xterm-256color", cols: DEFAULT_COLS, rows: DEFAULT_ROWS, cwd, env: env() });
+    const term = pty.spawn(command, typeof args === "function" ? args() : args, { name: "xterm-256color", cols: DEFAULT_COLS, rows: DEFAULT_ROWS, cwd, env: env(name) });
     const session = { term, buffer: "", clients: new Set() };
     term.onData((data) => {
       // Kept so a reattaching tab can show what happened while it was away.

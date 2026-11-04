@@ -10,6 +10,8 @@ import { WebSocketServer } from "ws";
 import { readAnalysisSummary, readBeatsSummary, readTimingsSummary } from "./analysis.mjs";
 import { createAudioTools } from "./audio-tools.mjs";
 import { createInstaller } from "./audio-install.mjs";
+import { createAgentAuth } from "./agent-auth.mjs";
+import { createAgentApi } from "./agent-api.mjs";
 import { createSongJobs, listStems } from "./song-jobs.mjs";
 import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
 import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listNumberedImages, saveImage } from "./images.mjs";
@@ -80,7 +82,8 @@ Notes for Claude about this MV go here. MV Studio's own rules are supplied by th
 // ConPTY cannot launch bare names or .cmd shims ("File not found"), so claude is started through a shell.
 const SHELL = process.platform === "win32" ? "powershell.exe" : process.env.SHELL || "bash";
 // Suno is passed per launch (nothing is written to the user's Claude settings); sign-in is done once via /mcp.
-const MCP_CONFIG = join(HERE, "suno.mcp.json");
+// Two servers reach Claude: Suno (remote) and MV Studio itself (a small local one, mcp-server.mjs, for separation and beat analysis).
+const MCP_CONFIGS = [join(HERE, "suno.mcp.json"), join(HERE, "mv-studio.mcp.json")];
 const RULES_FILE = join(HERE, "rules", "mv-studio.md");
 const quote = (s) => `'${s.replaceAll("'", process.platform === "win32" ? "''" : "'\\''")}'`;
 // Where the Claude CLI is. Re-detected on demand: it may be installed while the app is running.
@@ -91,7 +94,7 @@ if (!claude.found) console.warn("Claude Code was not found.\n" + installGuideTex
 function claudeCommandLine() {
   const run = claude.command === "claude" || !claude.command ? "claude"
     : process.platform === "win32" ? `& ${quote(claude.command)}` : quote(claude.command);
-  return `${run} --mcp-config ${quote(MCP_CONFIG)} --append-system-prompt-file ${quote(RULES_FILE)}`;
+  return `${run} --mcp-config ${MCP_CONFIGS.map(quote).join(" ")} --append-system-prompt-file ${quote(RULES_FILE)}`;
 }
 const shellArgs = () => process.platform === "win32"
   ? ["-NoLogo", "-NoExit", "-Command", claudeCommandLine()]
@@ -107,8 +110,18 @@ const claudeStatus = () => ({
 });
 
 // Drop the parent session's markers, or a Claude started from inside Claude runs as a child session.
-function childEnv() {
-  return Object.fromEntries(Object.entries(process.env).filter(([k, v]) => v !== undefined && !/^CLAUDE_?CODE/i.test(k)));
+function childEnv(project) {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k, v]) => v !== undefined && !/^CLAUDE_?CODE/i.test(k)));
+  // What the MV Studio MCP server (mcp-server.mjs, started by Claude from mv-studio.mcp.json) needs to call this app back:
+  // where it is, which project this Claude belongs to, and a token that works for that project only.
+  return project ? {
+    ...env,
+    MV_STUDIO_URL: `http://${HOST}:${PORT}`,
+    MV_STUDIO_PJ: project,
+    MV_STUDIO_TOKEN: agentAuth.tokenFor(project),
+    MV_STUDIO_APP_DIR: HERE,
+    MV_STUDIO_NODE: process.execPath,
+  } : env;
 }
 
 const sessions = createSessions({ command: SHELL, args: shellArgs, env: childEnv });
@@ -118,6 +131,10 @@ const audioTools = createAudioTools({ workspace: WORKSPACE, toolsDir: join(HERE,
 let installer = null;
 const songJobs = createSongJobs({ tools: audioTools, blocked: () => Boolean(installer?.running()) });
 installer = createInstaller({ tools: audioTools, isBusy: () => songJobs.manager.busy() });
+// The Claude of each project may ask for separation, beat analysis and the tool setup through this (see agent-api.mjs).
+// The secret is random per run. MV_STUDIO_AGENT_SECRET (hex) fixes it, which only exists so a test can compute a token.
+const agentAuth = createAgentAuth(process.env.MV_STUDIO_AGENT_SECRET ? Buffer.from(process.env.MV_STUDIO_AGENT_SECRET, "hex") : undefined);
+const agentApi = createAgentApi({ auth: agentAuth, existingPjDir, listNumberedSongs, songJobs, installer, audioTools, readBody, json });
 
 /** Resolve a project name from the client to its folder, or null. The name must be a plain folder name under PJs. */
 function pjDir(name) {
@@ -476,6 +493,7 @@ function shutdown(code) {
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${HOST}`);
   try {
+    if (await agentApi(req, res, url)) return;
     const fixed = STATIC[url.pathname];
     if (fixed) {
       // no-store: a stale tab must never keep an old UI after the app is updated.

@@ -60,7 +60,7 @@ export function createJobs({ run }) {
 
     /** Jobs of one project (or all), without the server-side details. */
     list(pj) {
-      return jobs.filter((job) => !pj || job.pj === pj).map(({ id, pj: project, base, kind, then, state, progress, error, queuedAt, startedAt, finishedAt }) => ({ id, pj: project, base, kind, then: then ?? null, state, progress, error, queuedAt, startedAt, finishedAt }));
+      return jobs.filter((job) => !pj || job.pj === pj).map(({ id, pj: project, base, kind, then, requestedBy, state, progress, error, queuedAt, startedAt, finishedAt }) => ({ id, pj: project, base, kind, then: then ?? null, requestedBy: requestedBy ?? "user", state, progress, error, queuedAt, startedAt, finishedAt }));
     },
 
     /** Stops a running job or removes a waiting one. Returns false when there is nothing to cancel. */

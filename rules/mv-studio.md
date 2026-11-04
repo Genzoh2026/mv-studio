@@ -27,16 +27,26 @@ songs on the right. The current directory is ONE MV project. These rules are sup
   - `inputs` lists the exact files you used (names, not ids). `parent` only for a new version of an earlier file.
   - `params` are flat key/value pairs (seconds, seed, resolution, ...). NEVER write API keys or tokens into it.
   - Spending generation credits (video, image APIs) needs the user's go-ahead first.
-- **Song stems and beats are made by the app, not by you** (the user presses a button on the song card; it runs on their
-  computer). You may READ the results, never write or edit them:
-  - `Output/song/<name>.stems/{vocals,drums,bass,other}.wav` (Demucs). Use `drums.wav` for hits and `vocals.wav` for
-    the voice instead of the full mix whenever you need to time something.
-  - `Output/song/<name>.beats.json`: `{"bpm", "bpm_alternatives", "beats": [seconds], "kick": [seconds], "snare": [...],
-    "hat": [...], "pulse": [...], "fps": 30, "low"/"mid"/"high"/"rms": [30 fps energy curves], "used_drums_stem": bool}`.
-    The hit times are reliable; the `bpm` is only an estimate (double or half the real tempo is a common mistake, so
-    check it against `bpm_alternatives` and the hit spacing before you rely on it). `used_drums_stem: false` means the
-    snare and hat times are rougher. If a song has no stems or beats yet, tell the user to press the button; do not
-    install or run Demucs yourself.
+- **Song stems and beats: use the `mv-studio` tools; never run Demucs or pip yourself.** The app does the work on the user's
+  computer, and the user sees your request in its progress bar and on the song card, just as if they had pressed the button.
+  You need no approval for these (they cost no credits). Tools: `list_songs`, `separate_song` (`then_beats: true` also
+  analyses the beats afterwards), `analyze_beats`, `job_status`, `wait_for_job`, `cancel_job`, `audio_tools_status`,
+  `setup_audio_tools`. A song is named by its id (`3` or `#3`) or its name.
+  - Work like this whenever a video, cut list or timing depends on a song: call `list_songs`; if the song has no stems,
+    call `separate_song` with `then_beats: true` and `wait_for_job` (repeat until it finishes; a separation takes about
+    a minute or less on a GPU and a few minutes on a CPU); if it has stems but no beats, call `analyze_beats`. Do not
+    time anything to a song whose beats you have not got, and do not use the full mix when the drums stem exists.
+  - If `audio_tools_status` shows `ready.separate` or `ready.beats` as false, set the tools up: say in one line what you
+    are doing ("setting up the audio tools, about 0.7 GB, a few minutes"), call `setup_audio_tools` and `wait_for_job` with
+    `job_id: "setup"`. This only fills the app's own Python environment in the workspace. Python and ffmpeg themselves
+    cannot be installed this way: if they are missing, tell the user what to install. Use `gpu: true` only if the user asked.
+  - Read the results from the files the tools return (relative to this folder): `Output/song/<name>.stems/{vocals,drums,bass,other}.wav`
+    and `Output/song/<name>.beats.json`: `{"bpm", "bpm_alternatives", "beats": [seconds], "kick": [seconds],
+    "snare": [...], "hat": [...], "pulse": [...], "fps": 30, "low"/"mid"/"high"/"rms": [30 fps energy curves],
+    "used_drums_stem": bool}`. Never write or edit these files. The hit times are reliable; the `bpm` is only an estimate
+    (double or half the real tempo is a common mistake, so check it against `bpm_alternatives` and the spacing of the hits).
+    `used_drums_stem: false` means the snare and hat times are rougher.
+  - Trashing, deleting and re-separating a song that already has stems stay with the user.
 - Every song, image and video has an id (1, 2, 3, ..., separately for each library), shown in the app as `#3`. The ledgers are
   `Output/song/index.json`, `Output/image/index.json` and `Output/video/index.json` (`items: [{id, name}]`); only the app writes
   them. For images and videos `name` is the file name. For songs it is the song's base path under `Output`, e.g.

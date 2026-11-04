@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "mv-studio": {
+      "command": "${MV_STUDIO_NODE}",
+      "args": ["${MV_STUDIO_APP_DIR}/mcp-server.mjs"],
+      "env": {
+        "MV_STUDIO_URL": "${MV_STUDIO_URL}",
+        "MV_STUDIO_PJ": "${MV_STUDIO_PJ}",
+        "MV_STUDIO_TOKEN": "${MV_STUDIO_TOKEN}"
+      }
+    }
+  }
+}

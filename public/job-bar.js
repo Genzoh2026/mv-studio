@@ -36,7 +36,7 @@ export function createJobBar({ root }) {
       const before = lastState.get(job.id);
       lastState.set(job.id, job.state);
       if (first || before === job.state) continue;
-      const name = `「${titleOf(job.base)}」の${KIND_LABELS[job.kind]}`;
+      const name = `「${titleOf(job.base)}」の${KIND_LABELS[job.kind]}${job.requestedBy === "claude" ? "(Claude の依頼)" : ""}`;
       if (job.state === "done") toast(`${name}が終わりました${job.then ? "(続けてビート解析します)" : ""}`, { key: `job-${job.id}` });
       else if (job.state === "error") toast(`${name}に失敗しました: ${job.error}`, { key: `job-${job.id}`, kind: "error" });
     }
@@ -76,7 +76,7 @@ export function createJobBar({ root }) {
       const waiting = active.length - 1;
       items.push(h("div", { className: "job-item" },
         h("progress", { max: 100, value: running.state === "running" ? running.progress : 0 }),
-        h("span", { className: "job-text", textContent: `${KIND_ICONS[running.kind]} ${KIND_LABELS[running.kind]}${running.state === "running" ? `中 ${running.progress}%` : ": 順番待ち"} 「${titleOf(running.base)}」${running.then ? "→ ビート解析" : ""}${waiting ? `  ほか ${waiting} 件待機` : ""}` }),
+        h("span", { className: "job-text", textContent: `${KIND_ICONS[running.kind]} ${KIND_LABELS[running.kind]}${running.state === "running" ? `中 ${running.progress}%` : ": 順番待ち"} 「${titleOf(running.base)}」${running.then ? "→ ビート解析" : ""}${running.requestedBy === "claude" ? "  [Claude の依頼]" : ""}${waiting ? `  ほか ${waiting} 件待機` : ""}` }),
         h("button", { type: "button", textContent: "取り消し", onclick: async () => { await cancelJob(running.id); tick(); } })));
     }
     root.replaceChildren(...items);
