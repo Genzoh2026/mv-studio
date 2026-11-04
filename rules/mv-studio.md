@@ -27,6 +27,21 @@ songs on the right. The current directory is ONE MV project. These rules are sup
   - `inputs` lists the exact files you used (names, not ids). `parent` only for a new version of an earlier file.
   - `params` are flat key/value pairs (seconds, seed, resolution, ...). NEVER write API keys or tokens into it.
   - Spending generation credits (video, image APIs) needs the user's go-ahead first.
+- **Skills, plugins and tools for video work come from a curated catalog.** At the start of a video task (or when the user asks
+  what could help), call `list_video_tools` (optionally with a `category`). Propose only what is in that list, never something
+  you found on the web. For each entry you get what it is for, what it needs, costs, sign-in, the exact commands, and
+  `installed.state` (installed / partial / not-installed / unknown / builtin / manual).
+  - Use what is installed. Prefer entries with `status: recommended`. If something you need is not installed, tell the user in a
+    few lines: the name and maker, what it does, what it needs, any cost or sign-in, the license caveats in `notes_ja`, and the
+    exact commands. Then wait for a clear yes before running anything. One yes covers that entry only.
+  - Run the commands exactly as written, one at a time, with the shell tool, from this project folder. They are all project scope.
+    Never add `-g`, `--scope user`, `--all` or `sudo`, never pipe or chain commands, never run an install command that is not in the catalog.
+  - Entries of kind `system` (Python, ffmpeg) and `connector` (claude.ai connectors) are for the user to set up: give them the steps in
+    `manual_steps_ja`. Sign-in, OAuth and API keys are the user's to do; never type or ask for them. Anything that spends credits
+    (video or image generation APIs) needs the user's go-ahead for each run, with the cost stated.
+  - After an install, check it with `list_video_tools` again. If the new skill or plugin is not picked up, ask the user to end this
+    project's Claude from the project list and open the project again.
+  - If the catalog has nothing for what the user wants, say so and suggest it be added to the catalog (a repository change); do not improvise an install.
 - **Song stems and beats: use the `mv-studio` tools; never run Demucs or pip yourself.** The app does the work on the user's
   computer, and the user sees your request in its progress bar and on the song card, just as if they had pressed the button.
   You need no approval for these (they cost no credits). Tools: `list_songs`, `separate_song` (`then_beats: true` also

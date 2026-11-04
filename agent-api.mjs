@@ -2,6 +2,8 @@
 // follow the jobs, and set up the audio tools. Every call carries the project's token and can only touch that project.
 // Claude cannot trash or delete anything through here, and cannot reach other projects.
 
+import { describeCatalog } from "./catalog.mjs";
+
 const PREFIX = "/api/agent/";
 const ACTIVE = ["queued", "running"];
 
@@ -26,7 +28,7 @@ export function resolveSong(songs, ref) {
  *   readBody: (req: import("node:http").IncomingMessage) => Promise<any>, json: (res: any, status: number, value: unknown) => void}} deps
  * @returns {(req: import("node:http").IncomingMessage, res: any, url: URL) => Promise<boolean>} true when the request was handled
  */
-export function createAgentApi({ auth, existingPjDir, listNumberedSongs, songJobs, installer, audioTools, readBody, json }) {
+export function createAgentApi({ auth, existingPjDir, listNumberedSongs, songJobs, installer, audioTools, readBody, json, catalog = null, getPlugins = async () => null }) {
   /** One song as Claude needs it: where its files are (relative to the project) and what exists. */
   const describe = (song, jobs) => ({
     id: song.id,
@@ -53,6 +55,14 @@ export function createAgentApi({ auth, existingPjDir, listNumberedSongs, songJob
       return ok({ songs: (await listNumberedSongs(pj)).map((song) => describe(song, jobs)) });
     }
     if (route === "jobs" && req.method === "GET") return ok({ jobs: songJobs.manager.list(pj), setup: installer.snapshot() });
+    if (route === "video-tools" && req.method === "GET") {
+      if (!catalog) {
+        json(res, 503, { error: "the video tools catalog could not be loaded (see the app's log)" });
+        return true;
+      }
+      const category = url.searchParams.get("category") || undefined;
+      return ok(await describeCatalog(catalog, { pjDir: dir, plugins: await getPlugins(dir), category }));
+    }
     if (route === "audio-tools" && req.method === "GET") return ok(await audioTools.status({ refresh: url.searchParams.get("refresh") === "1" }));
     if (route === "process" && req.method === "POST") {
       if (body.kind !== "separate" && body.kind !== "beats") {

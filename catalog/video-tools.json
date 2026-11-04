@@ -1,0 +1,302 @@
+{
+  "version": 1,
+  "updated": "2026-11-05",
+  "policy_ja": [
+    "ここに載っているものだけを、導入の候補にします。載っていないスキルやプラグインを、Web で見つけて導入してはいけません(追加は、リポジトリへの変更として行います)。",
+    "導入の前に、必ずユーザーに、何を入れるか(名前、作者、実行するコマンド、必要なもの、料金・サインインの有無)を見せて、承認を得ます。承認なしに導入しません。",
+    "導入は、このプロジェクトの中だけです(コマンドは、すべて project 範囲)。-g や --scope user は使いません。コマンドは、ここに書かれたものを、そのまま実行します(書き換えない、つなげない)。",
+    "サインイン、OAuth、API キーは、ユーザーが行います。Claude が入力したり、聞き出したりしません。料金のかかる生成は、従来どおり、実行のたびに承認を得ます。",
+    "Python と ffmpeg など、PC 全体に入れるもの(kind: system)は、Claude は入れません。ユーザーに手順を伝えます。",
+    "導入のあと、新しいスキルやプラグインが反映されない場合は、このプロジェクトの Claude を終了して開き直すよう、ユーザーに伝えます。"
+  ],
+  "entries": [
+    {
+      "id": "mv-studio-audio",
+      "name": "MV Studio の音声ツール(分離・ビート解析)",
+      "kind": "builtin",
+      "category": ["audio", "music-video"],
+      "maker": "official",
+      "status": "installed-by-app",
+      "summary_ja": "曲の分離(声・ドラム・ベース・その他)とビート解析。このアプリが、起動のたびに道具(mv-studio)として渡します。",
+      "use_when_ja": "曲に合わせてカットや動きを付けるとき。まず list_songs を呼び、分離とビート解析が済んでいるか確認する。",
+      "source": "https://github.com/Genzoh2026/mv-studio",
+      "license": "MIT",
+      "requires": [],
+      "costs": "none",
+      "signin": false,
+      "manual_steps_ja": ["導入は不要です(アプリが渡します)。足りないツールは、setup_audio_tools で入れます。"],
+      "verified": "2026-11-05",
+      "evidence": ["https://github.com/Genzoh2026/mv-studio"]
+    },
+    {
+      "id": "suno",
+      "name": "Suno(曲の生成)",
+      "kind": "builtin",
+      "category": ["audio", "generation"],
+      "maker": "official",
+      "status": "installed-by-app",
+      "summary_ja": "曲の生成と試聴。このアプリが、起動のたびに MCP として渡します。",
+      "use_when_ja": "曲を作るとき。生成にはクレジットを使うので、実行前にユーザーの承認を得る。ダウンロードは枠を使うので、頼まれたときだけ。",
+      "source": "https://suno.com",
+      "license": "サービスの規約に従う",
+      "requires": ["Suno のアカウント(初回は /mcp でサインイン)"],
+      "costs": "account-required",
+      "signin": true,
+      "manual_steps_ja": ["導入は不要です(アプリが渡します)。初回は、Claude の画面で /mcp を開き、Suno にサインインします。"],
+      "verified": "2026-11-05",
+      "evidence": ["https://api.suno.com/mcp"]
+    },
+    {
+      "id": "hyperframes",
+      "name": "HyperFrames(HTML から動画を描画)",
+      "kind": "plugin",
+      "category": ["render", "animation", "music-video"],
+      "maker": "official",
+      "status": "recommended",
+      "summary_ja": "HTML・CSS・GSAP などのアニメーションを、フレームごとに描画して MP4 にする仕組み(HeyGen 製、オープンソース)。コードで作るミュージックビデオ、モーショングラフィックス、歌詞動画の土台になる。",
+      "use_when_ja": "AI 動画生成を使わず、曲のビートに合わせたモーショングラフィックスや歌詞動画を、コードで作るとき。このアプリのビート解析の結果(.beats.json)と相性が良い。",
+      "source": "https://github.com/heygen-com/hyperframes",
+      "license": "Apache-2.0",
+      "requires": ["Node.js 22 以上", "ffmpeg", "Chrome(ヘッドレスで描画に使う)"],
+      "costs": "none",
+      "signin": false,
+      "provides": { "plugin": "hyperframes@hyperframes", "skills": ["hyperframes", "hyperframes-cli", "hyperframes-registry", "media-use"] },
+      "install": {
+        "commands": [
+          "claude plugin marketplace add heygen-com/hyperframes --scope project",
+          "claude plugin install hyperframes@hyperframes --scope project"
+        ]
+      },
+      "notes_ja": [
+        "9 つのスキルが入る。reverse-any-video と style-sampling は、README で HyperFrames Pro 向けとされている(有料の可能性。使う前に確認する)。",
+        "描画は、ヘッドレス Chrome でコードを実行する。サンプルは GSAP を CDN から読み込むため、ネットワークに接続することがある。",
+        "media-use は、HeyGen のサービスや無料のローカルツールで素材を得る。HeyGen を使う場合は、アカウントと料金を確認してから。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": ["https://github.com/heygen-com/hyperframes"]
+    },
+    {
+      "id": "painted-animation",
+      "name": "painted-animation(手描き風アニメ・歌詞付き MV)",
+      "kind": "plugin",
+      "category": ["music-video", "render"],
+      "maker": "community",
+      "status": "optional",
+      "summary_ja": "曲と歌詞(LRC)から、水彩のような手描き風のアニメーション動画を、コードだけで作る(画像・動画の生成 AI は使わない)。絵コンテ、レビュー、歌詞の同期、書き出しまでの流れがある。",
+      "use_when_ja": "水彩・手描き風のミュージックビデオを作るとき。曲の音源と LRC 形式の歌詞が必要。",
+      "source": "https://github.com/tuzhechen2005/opus-video-skills",
+      "license": "MIT",
+      "requires": ["Claude Opus 5.5(README の推奨)", "Node.js", "Google Chrome", "ffmpeg", "Python 3 と numpy(テンポ検出用)"],
+      "costs": "none",
+      "signin": false,
+      "provides": { "plugin": "painted-animation@opus-video-skills", "skills": ["painted-animation"] },
+      "install": {
+        "commands": [
+          "claude plugin marketplace add tuzhechen2005/opus-video-skills --scope project",
+          "claude plugin install painted-animation@opus-video-skills --scope project"
+        ]
+      },
+      "notes_ja": [
+        "出どころが少し紛らわしい。README のあるページは Joker-chichi/claude-mv-skill で、導入コマンドは tuzhechen2005/opus-video-skills を指す。導入するのは、後者。",
+        "最終の書き出しで『クラウドで描画』を選べる。選ぶと、素材や歌詞が外部に出る可能性がある(何が送られるかは README に書かれていない)。ローカルを選ぶ。",
+        "Node、Puppeteer、ヘッドレス Chrome で、生成したコードを実行する。小さく新しいプロジェクト(コミット数が少ない)なので、使う前に中身を確認する。",
+        "このアプリのビート解析と重なる部分(テンポ検出)がある。アプリの .beats.json のほうが、ドラムのステムを使うぶん詳しい。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": ["https://github.com/Joker-chichi/claude-mv-skill"]
+    },
+    {
+      "id": "remotion-skills",
+      "name": "Remotion(React で動画を作る・公式スキル)",
+      "kind": "skills",
+      "category": ["render", "animation", "captions"],
+      "maker": "official",
+      "status": "optional",
+      "summary_ja": "Remotion(React で動画を作る仕組み)の公式スキル集。プロジェクトの作成、アニメーション、字幕、描画、プレビューなどの作法が入っている(13 個)。",
+      "use_when_ja": "React でコンポーネントとして動画を組み立てたいとき。字幕(remotion-captions)や描画(remotion-render)も使える。",
+      "source": "https://github.com/remotion-dev/skills",
+      "license": "スキル集はリポジトリ参照。Remotion 本体は独自のライセンス",
+      "requires": ["Node.js(npx)", "Remotion のプロジェクト(bun create video など)"],
+      "costs": "none",
+      "signin": false,
+      "provides": { "skills": ["remotion-best-practices", "remotion-create", "remotion-markup", "remotion-studio", "remotion-render", "remotion-captions", "remotion-docs"] },
+      "install": {
+        "commands": [
+          "npx skills add remotion-dev/skills -a claude-code --copy -y"
+        ]
+      },
+      "notes_ja": [
+        "ライセンスに注意: Remotion 本体は、個人・非営利団体・従業員 3 名以下の営利組織は無料で、それ以外の営利組織(4 名以上)は会社ライセンスが必要(LICENSE.md)。Remotion 5.0 でライセンスが変わる予定。商用利用の前に、ユーザーに確認する。",
+        "HyperFrames と同じことを別の方法でする。まずは HyperFrames を優先し、React で組みたい理由があるときに使う。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": ["https://github.com/remotion-dev/skills", "https://raw.githubusercontent.com/remotion-dev/remotion/main/LICENSE.md"]
+    },
+    {
+      "id": "motion-graphics-skills",
+      "name": "motion-graphics-skills(モーショングラフィックス 15 種)",
+      "kind": "skills",
+      "category": ["animation", "render"],
+      "maker": "community",
+      "status": "optional",
+      "summary_ja": "コードだけで作るモーショングラフィックスのスキル集(MIT)。ブランドの下調べ、企画、ローンチ動画、図解、チャート、タイトル、ループなど。出力は HTML で、MP4 への書き出しには HyperFrames か、ffmpeg と Chrome を使う。",
+      "use_when_ja": "宣伝・解説・タイトルなど、短いモーション作品を作るとき。ミュージックビデオ専用ではない。",
+      "source": "https://github.com/charlie947/motion-graphics-skills",
+      "license": "MIT",
+      "requires": ["Node.js(npx)", "MP4 への書き出しには HyperFrames、または ffmpeg と Chrome", "Claude Opus 5.5(README の推奨)"],
+      "costs": "none",
+      "signin": false,
+      "provides": { "skills": ["brand-intake", "motion-brief-writer", "title-sequence-3d", "motion-effects", "loop-cover", "reel-export"] },
+      "install": {
+        "commands": [
+          "npx skills add charlie947/motion-graphics-skills -a claude-code --copy -y"
+        ]
+      },
+      "notes_ja": [
+        "最初に brand-intake を実行して、brand.md と MOTION.md を作る流れになっている。",
+        "ロゴやスクリーンショットは、ユーザー自身のファイルを使う前提。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": ["https://github.com/charlie947/motion-graphics-skills"]
+    },
+    {
+      "id": "gsap-skills",
+      "name": "GSAP(アニメーションライブラリ・公式スキル)",
+      "kind": "skills",
+      "category": ["animation"],
+      "maker": "official",
+      "status": "optional",
+      "summary_ja": "GSAP(GreenSock)の公式スキル 8 個。タイムライン、プラグイン、パフォーマンスなど。GSAP は、プラグインを含めて無料(公式 README)。HyperFrames の作品でも GSAP が使われる。",
+      "use_when_ja": "HyperFrames などの作品で、タイムラインを使った細かい動きを、正しく書きたいとき。",
+      "source": "https://github.com/greensock/gsap-skills",
+      "license": "MIT",
+      "requires": ["Node.js(npx)"],
+      "costs": "none",
+      "signin": false,
+      "provides": { "skills": ["gsap-core", "gsap-timeline", "gsap-plugins", "gsap-utils", "gsap-performance"] },
+      "install": {
+        "commands": [
+          "npx skills add https://github.com/greensock/gsap-skills -a claude-code --copy -y"
+        ]
+      },
+      "notes_ja": ["Web ページ向けの内容(scrolltrigger、react など)も含まれる。動画では gsap-timeline などが中心。"],
+      "verified": "2026-11-05",
+      "evidence": ["https://github.com/greensock/gsap-skills"]
+    },
+    {
+      "id": "comfyui-mcp",
+      "name": "ComfyUI MCP(ComfyUI から画像を生成)",
+      "kind": "mcp",
+      "category": ["generation"],
+      "maker": "community",
+      "status": "optional",
+      "summary_ja": "起動している ComfyUI に接続して、画像の生成、ワークフローの実行、モデルの管理を行う MCP(MIT)。生成した画像は、画像ライブラリに入れる(.gen.json つき)。",
+      "use_when_ja": "ローカルの ComfyUI で、動画の元になる静止画を作るとき。ComfyUI が起動していることが前提。",
+      "source": "https://github.com/artokun/comfyui-mcp",
+      "license": "MIT",
+      "requires": ["ComfyUI が起動していること(8188 または 8000 番)", "Node.js 22 以上"],
+      "costs": "none",
+      "signin": false,
+      "provides": { "mcp": "comfyui" },
+      "install": {
+        "commands": [
+          "claude mcp add comfyui --scope project -- npx -y comfyui-mcp"
+        ]
+      },
+      "notes_ja": [
+        "API キーは不要(モデルのダウンロード用に CIVITAI_API_TOKEN などを任意で設定できる。入力はユーザーが行う)。",
+        "npx -y は、起動のたびに npm のパッケージを取得して実行する。導入後に版を確認し、版を固定することを、ユーザーに提案する。",
+        "プロジェクトの .mcp.json に追加される。Claude Code の最初の使用時に、ユーザーの承認が求められる。",
+        "生成した画像は、Output/image/ に、名前を変えて保存し、.gen.json(元データ・生成方法)を必ず書く(ルール参照)。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": ["https://github.com/artokun/comfyui-mcp"]
+    },
+    {
+      "id": "topview",
+      "name": "Topview(Canvas)",
+      "kind": "plugin",
+      "category": ["generation", "editing"],
+      "maker": "official",
+      "status": "optional",
+      "summary_ja": "Topview の Canvas を、エージェントから作成・編集し、Canvas のリンクを開く(MIT)。",
+      "use_when_ja": "Topview の Canvas で、動画や画像の制作を進めるとき。",
+      "source": "https://github.com/topviewai/plugins",
+      "license": "MIT",
+      "requires": ["Topview のアカウント(初回に OAuth でサインイン)"],
+      "costs": "account-required",
+      "signin": true,
+      "provides": { "plugin": "topview-browser@topview" },
+      "install": {
+        "commands": [
+          "claude plugin marketplace add https://github.com/topviewai/plugins --scope project --sparse .claude-plugin plugins",
+          "claude plugin install topview-browser@topview --scope project"
+        ]
+      },
+      "notes_ja": [
+        "公式の手順(docs/claude.md)は --scope user だが、このカタログでは project に変えてある。",
+        "料金(クレジット)がかかる生成は、実行前に必ずユーザーの承認を得る。",
+        "このアプリを使っている環境によっては、すでに user 範囲で導入済みのことがある(状態表示で確認する)。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": ["https://raw.githubusercontent.com/topviewai/plugins/main/docs/claude.md", "https://github.com/topviewai/plugins"]
+    },
+    {
+      "id": "kling",
+      "name": "Kling AI(画像→動画などの生成)",
+      "kind": "connector",
+      "category": ["generation"],
+      "maker": "official",
+      "status": "optional",
+      "summary_ja": "Kling AI による、画像・動画の生成(テキスト→動画、画像→動画、モーション制御など)。claude.ai のコネクタ経由で提供される。",
+      "use_when_ja": "承認済みの静止画から、動画のカットを作るとき(静止画からの生成が基本)。",
+      "source": "https://kling.ai",
+      "license": "サービスの規約に従う",
+      "requires": ["Kling のアカウント", "claude.ai のコネクタ設定"],
+      "costs": "paid-accounts",
+      "signin": true,
+      "manual_steps_ja": [
+        "claude.ai の設定 > コネクタ で Kling AI を有効にします(この環境では、claude plugin list の Synced に kling-ai が出ていれば、同期済みです)。",
+        "初回はサインインします。",
+        "生成はクレジットを使います。実行のたびに、内容と費用を見せて、ユーザーの承認を得ます(勝手に試し撃ちをしない)。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": ["claude plugin list(ユーザー環境の同期済みの表示)"]
+    },
+    {
+      "id": "ffmpeg",
+      "name": "ffmpeg(動画・音声の変換と編集)",
+      "kind": "system",
+      "category": ["editing", "render"],
+      "maker": "community",
+      "status": "recommended",
+      "summary_ja": "動画・音声の変換、結合、切り出しの定番ツール。HyperFrames、ビート解析、Demucs など、多くのものが必要とする。",
+      "use_when_ja": "他のツールが ffmpeg を必要とするとき。入っていなければ、ユーザーに入れてもらう。",
+      "source": "https://ffmpeg.org",
+      "license": "LGPL / GPL(ビルドによる)",
+      "requires": [],
+      "costs": "none",
+      "signin": false,
+      "manual_steps_ja": [
+        "Windows: winget install Gyan.FFmpeg",
+        "macOS: brew install ffmpeg",
+        "Linux: sudo apt install ffmpeg",
+        "入れたら、アプリの設定 > 音声ツールで「再確認」を押します(PATH は起動時に読み込まれるので、見つからなければアプリを再起動します)。"
+      ],
+      "verified": "2026-11-05",
+      "evidence": ["https://ffmpeg.org/download.html"]
+    }
+  ],
+  "watchlist": [
+    { "name": "fradser/dotclaude の music-to-video", "source": "https://github.com/FradSer/dotclaude", "reason_ja": "歌詞動画に向くという情報があるが、リポジトリのページ上で、music-to-video の存在・導入方法・必要なものを確認できなかった。確認できたら追加する。" },
+    { "name": "bestagentkits/motion-video-skill", "source": "https://github.com/bestagentkits/motion-video-skill", "reason_ja": "ビートに合わせた動画を作れるが、Gemini と ElevenLabs の有料アカウント(multix CLI 経由)が必要で、npx --yes で外部パッケージを自動実行する。コミットが 2 件と新しい。MV には必須でないため、保留。" },
+    { "name": "Sunwood-ai-labs/hyperframes-motion-reel-skill", "source": "https://github.com/Sunwood-ai-labs/hyperframes-motion-reel-skill", "reason_ja": "ビート同期のリールを作れるが、音楽をスクリプトで自動生成する用途で、ユーザーの曲を使う MV には合わない。導入が ~/.claude へのクローン(全体への導入)で、コミットも少ない。" },
+    { "name": "ecliptic-ai/skills の beat-sync-video-editing", "source": "https://github.com/ecliptic-ai/skills", "reason_ja": "Gemini の API に依存する。このアプリのビート解析(ローカル)で足りるため、保留。" },
+    { "name": "anthropics/skills(Creative & Design)", "source": "https://github.com/anthropics/skills", "reason_ja": "Anthropic の公式スキル集(多くは Apache-2.0)。動画専用のものは見当たらず、画像・デザイン系の中身(スキル名)は未確認。確認できたら追加する。" },
+    { "name": "emilkowalski/skills(animate ほか)", "source": "https://github.com/emilkowalski/skills", "reason_ja": "Web の UI の動き(ボタン、モーダルなど)向け。動画制作とは用途が違うため、対象外。" }
+  ],
+  "sources_to_watch": [
+    { "name": "awesome-claude-video-skills(動画系スキルの一覧。リポジトリごとに、第三者の安全性評価つき)", "source": "https://github.com/zhuyansen/awesome-claude-video-skills" },
+    { "name": "awesome-motion-design-agent-skills(モーションデザイン系の一覧)", "source": "https://github.com/frankxai/awesome-motion-design-agent-skills" }
+  ]
+}

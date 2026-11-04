@@ -47,6 +47,11 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { job_id: { type: "string" } }, required: ["job_id"], additionalProperties: false },
   },
   {
+    name: "list_video_tools",
+    description: "The curated list of skills, plugins, MCP servers and tools for making videos (render, music-video, animation, generation, captions, editing, audio), each with what it is for, what it needs, costs, sign-in, the exact install commands, and whether it is installed in THIS project. Only entries in this list may be proposed. Call it when a video task starts, before suggesting any tool. See the rules for how to install.",
+    inputSchema: { type: "object", properties: { category: { type: "string", enum: ["render", "music-video", "animation", "generation", "captions", "editing", "audio"], description: "Only entries of this category" } }, additionalProperties: false },
+  },
+  {
     name: "audio_tools_status",
     description: "Whether the audio tools are ready: Python, numpy, Demucs, ffmpeg, GPU. ready.separate and ready.beats say what can be used now.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
@@ -110,6 +115,7 @@ const HANDLERS = {
   },
   wait_for_job: ({ job_id, timeout_seconds }) => waitForJob(job_id, timeout_seconds),
   cancel_job: ({ job_id }) => api("POST", "cancel", { job_id }),
+  list_video_tools: ({ category }) => api("GET", category ? `video-tools?category=${encodeURIComponent(category)}` : "video-tools"),
   audio_tools_status: () => api("GET", "audio-tools"),
   setup_audio_tools: async ({ gpu }) => summary({ id: "setup", ...(await api("POST", "audio-setup", { gpu: gpu === true })) }),
 };

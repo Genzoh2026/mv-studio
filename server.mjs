@@ -2,6 +2,7 @@
 // Layout: <workspace>/PJs/<YYYYMMDD-name>/Output/<kind>/...  The folder is the API:
 // Claude writes files there, this app only reads them (and creates new project folders).
 import { createServer } from "node:http";
+import { execFile } from "node:child_process";
 import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { createReadStream, readFileSync } from "node:fs";
 import { basename, extname, join, resolve, sep } from "node:path";
@@ -12,6 +13,7 @@ import { createAudioTools } from "./audio-tools.mjs";
 import { createInstaller } from "./audio-install.mjs";
 import { createAgentAuth } from "./agent-auth.mjs";
 import { createAgentApi } from "./agent-api.mjs";
+import { loadCatalog } from "./catalog.mjs";
 import { createSongJobs, listStems } from "./song-jobs.mjs";
 import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
 import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listNumberedImages, saveImage } from "./images.mjs";
@@ -134,7 +136,34 @@ installer = createInstaller({ tools: audioTools, isBusy: () => songJobs.manager.
 // The Claude of each project may ask for separation, beat analysis and the tool setup through this (see agent-api.mjs).
 // The secret is random per run. MV_STUDIO_AGENT_SECRET (hex) fixes it, which only exists so a test can compute a token.
 const agentAuth = createAgentAuth(process.env.MV_STUDIO_AGENT_SECRET ? Buffer.from(process.env.MV_STUDIO_AGENT_SECRET, "hex") : undefined);
-const agentApi = createAgentApi({ auth: agentAuth, existingPjDir, listNumberedSongs, songJobs, installer, audioTools, readBody, json });
+// The curated list of video skills and plugins (catalog/video-tools.json). An invalid file is reported and the list is switched off,
+// so a broken edit can never put an unchecked command in front of Claude.
+let videoCatalog = null;
+try {
+  videoCatalog = await loadCatalog(join(HERE, "catalog", "video-tools.json"));
+} catch (err) {
+  console.error(`The video tools catalog is not available: ${err.message}`);
+}
+
+/** `claude plugin list --json` for a project (what is installed there and for the user), cached briefly; null when it cannot be read. */
+const pluginCache = new Map();
+const PLUGIN_CACHE_MS = 20_000;
+const PLUGIN_LIST_TIMEOUT_MS = 20_000;
+function getPlugins(pjDirPath) {
+  const hit = pluginCache.get(pjDirPath);
+  if (hit && Date.now() - hit.at < PLUGIN_CACHE_MS) return hit.value;
+  const value = new Promise((resolve) => {
+    if (!claude.found) return resolve(null);
+    // Fixed arguments only. On Windows an npm install of claude is a .cmd shim, which only a shell can run.
+    execFile(claude.command, ["plugin", "list", "--json"], { cwd: pjDirPath, timeout: PLUGIN_LIST_TIMEOUT_MS, windowsHide: true, shell: process.platform === "win32", maxBuffer: 4 * 1024 * 1024 }, (error, stdout) => {
+      try { resolve(error ? null : JSON.parse(stdout)); } catch { resolve(null); }
+    });
+  });
+  pluginCache.set(pjDirPath, { at: Date.now(), value });
+  return value;
+}
+
+const agentApi = createAgentApi({ auth: agentAuth, existingPjDir, listNumberedSongs, songJobs, installer, audioTools, readBody, json, catalog: videoCatalog, getPlugins });
 
 /** Resolve a project name from the client to its folder, or null. The name must be a plain folder name under PJs. */
 function pjDir(name) {

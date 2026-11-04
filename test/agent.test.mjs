@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { createAgentApi, resolveSong } from "../agent-api.mjs";
 import { createAgentAuth } from "../agent-auth.mjs";
+import { validateCatalog } from "../catalog.mjs";
 
 const MCP_SERVER = fileURLToPath(new URL("../mcp-server.mjs", import.meta.url));
 
@@ -40,7 +41,7 @@ test("a song is found by id, #id or name, and an unclear reference is refused wi
 });
 
 /** The app side, faked: the real auth and the real agent API over HTTP, with recording stand-ins for the queue. */
-async function fakeApp() {
+async function fakeApp(opts = {}) {
   const auth = createAgentAuth(Buffer.from("test-secret"));
   const calls = { enqueued: [], cancelled: [], setup: [] };
   let jobs = [{ id: "job-1", pj: "p1", base: "song/third", kind: "beats", then: null, requestedBy: "claude", state: "running", progress: 40, error: null }];
@@ -55,6 +56,7 @@ async function fakeApp() {
     existingPjDir: async (pj) => (pj === "p1" || pj === "p2" ? `/work/${pj}` : null),
     listNumberedSongs: async () => songs,
     songJobs, installer, audioTools: { status: async () => ({ ready: { separate: true, beats: true } }) },
+    catalog: opts.catalog ?? null, getPlugins: async () => opts.plugins ?? null,
     readBody: async (req) => { let text = ""; for await (const chunk of req) text += chunk; return JSON.parse(text || "{}"); },
     json: (res, status, value) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(value)); },
   });
@@ -98,7 +100,7 @@ test("MCP: handshake, tool list, and a song list with the ids and files Claude n
     const init = await client.request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
     assert.equal(init.result.serverInfo.name, "mv-studio");
     const list = await client.request("tools/list");
-    assert.deepEqual(list.result.tools.map((t) => t.name), ["list_songs", "separate_song", "analyze_beats", "job_status", "wait_for_job", "cancel_job", "audio_tools_status", "setup_audio_tools"]);
+    assert.deepEqual(list.result.tools.map((t) => t.name), ["list_songs", "separate_song", "analyze_beats", "job_status", "wait_for_job", "cancel_job", "list_video_tools", "audio_tools_status", "setup_audio_tools"]);
     assert.ok(list.result.tools.every((t) => t.description && t.inputSchema.type === "object"));
     const { data } = await client.tool("list_songs");
     const third = data.songs.find((s) => s.id === 3);
@@ -175,4 +177,38 @@ test("MCP: when the app is not reachable the tool says what to do instead of fai
     assert.equal(answer.isError, true);
     assert.match(answer.text, /not reachable.*reopen this project/);
   } finally { client.close(); }
+});
+
+const toolCatalog = {
+  version: 1, updated: "2026-11-05", policy_ja: ["rule"],
+  entries: [
+    { id: "hyper", name: "Hyper", kind: "plugin", category: ["render"], maker: "official", status: "recommended", summary_ja: "s", use_when_ja: "u", source: "https://example.com", license: "MIT", requires: [], costs: "none", signin: false, verified: "2026-11-05", evidence: ["https://example.com"], provides: { plugin: "hyper@hyper" }, install: { commands: ["claude plugin install hyper@hyper --scope project"] } },
+    { id: "gen", name: "Gen", kind: "connector", category: ["generation"], maker: "official", status: "optional", summary_ja: "s", use_when_ja: "u", source: "https://example.com", license: "x", requires: [], costs: "paid-accounts", signin: true, verified: "2026-11-05", evidence: ["https://example.com"], manual_steps_ja: ["do it"] },
+  ],
+  watchlist: [{ name: "w", source: "https://example.com", reason_ja: "r" }],
+};
+
+test("MCP: list_video_tools returns the curated list with this project's install state, and can filter by category", async () => {
+  assert.deepEqual(validateCatalog(toolCatalog), []);
+  const app = await fakeApp({ catalog: toolCatalog, plugins: [{ id: "hyper@hyper", scope: "project", enabled: true }] });
+  const client = mcpClient(envFor(app));
+  try {
+    const all = await client.tool("list_video_tools");
+    assert.deepEqual(all.data.entries.map((e) => [e.id, e.installed.state]), [["hyper", "installed"], ["gen", "manual"]]);
+    assert.equal(all.data.entries[0].install.commands[0], "claude plugin install hyper@hyper --scope project");
+    assert.ok(all.data.policy_ja.length && all.data.watchlist.length);
+    assert.ok(all.data.entries.every((e) => !("evidence" in e)));
+    const generation = await client.tool("list_video_tools", { category: "generation" });
+    assert.deepEqual(generation.data.entries.map((e) => e.id), ["gen"]);
+  } finally { client.close(); await app.close(); }
+});
+
+test("MCP: without a loadable catalog the tool says so instead of returning an empty list", async () => {
+  const app = await fakeApp();
+  const client = mcpClient(envFor(app));
+  try {
+    const answer = await client.tool("list_video_tools");
+    assert.equal(answer.isError, true);
+    assert.match(answer.text, /catalog could not be loaded/);
+  } finally { client.close(); await app.close(); }
 });
