@@ -94,5 +94,8 @@ export function createJobs({ run }) {
     },
 
     running: () => jobs.some((j) => j.state === "running"),
+
+    /** Whether anything is running or waiting (the tool setup must not start then). */
+    busy: () => jobs.some((j) => ["queued", "running"].includes(j.state)),
   };
 }

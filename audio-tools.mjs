@@ -135,6 +135,27 @@ export function createAudioTools({ workspace, toolsDir, env = process.env, platf
       return this.status({ refresh: true });
     },
 
+    /** Where the app's own Python environment lives (the only one the setup ever changes). */
+    venvDir: join(workspace, SETTINGS_DIR, "venv"),
+    venvPython,
+
+    /** What the workspace environment can do (null when it does not exist or does not run). */
+    async inspectVenv() {
+      return (await stat(venvPython).then((s) => s.isFile(), () => false)) ? probe(asCommand(venvPython)) : null;
+    },
+
+    /** The Python to create the workspace environment with: whichever was found. */
+    async basePython() {
+      if (!cached) await detect();
+      return cached._run;
+    },
+
+    /** The NVIDIA GPU's name, or null. Independent of which Python is in use. */
+    async gpuName() {
+      const out = await capture("nvidia-smi", ["--query-gpu=name", "--format=csv,noheader"], 8000);
+      return out?.trim().split(String.fromCharCode(10))[0]?.trim() || null;
+    },
+
     async setModel(model) {
       if (!MODELS.includes(model)) throw new Error(`model: one of ${MODELS.join(", ")}`);
       await writeSettings({ ...(await readSettings()), model });
@@ -189,10 +210,10 @@ export function installHelp({ python, numpy, demucs, demucsError = null, gpu = n
   // The Python that will run Demucs: the one found, or the workspace environment the steps below create.
   const runner = python.found && demucs ? [python.command, ...(python.pre ?? [])].map(quote).join(" ") : `"${venvPython}"`;
   if (!python.found) {
-    steps.push({ label: "Python 3 を入れる", command: win ? "winget install Python.Python.3.12" : platform === "darwin" ? "brew install python" : "sudo apt install python3 python3-venv", note: "入れたら、アプリの「再確認」を押します(PATH は起動時に読み込まれるので、見つからなければアプリを再起動してください)。PyTorch が対応するのは Python 3.9〜3.12 ごろまでです" });
+    steps.push({ kind: "system", label: "Python 3 を入れる", command: win ? "winget install Python.Python.3.12" : platform === "darwin" ? "brew install python" : "sudo apt install python3 python3-venv", note: "入れたら、アプリの「再確認」を押します(PATH は起動時に読み込まれるので、見つからなければアプリを再起動してください)。PyTorch が対応するのは Python 3.9〜3.12 ごろまでです" });
   }
   if (!ffmpeg.found) {
-    steps.push({ label: "ffmpeg を入れる", command: win ? "winget install Gyan.FFmpeg" : platform === "darwin" ? "brew install ffmpeg" : "sudo apt install ffmpeg" });
+    steps.push({ kind: "system", label: "ffmpeg を入れる", command: win ? "winget install Gyan.FFmpeg" : platform === "darwin" ? "brew install ffmpeg" : "sudo apt install ffmpeg" });
   }
   if (!demucs) {
     const venv = join(workspace, SETTINGS_DIR, "venv");

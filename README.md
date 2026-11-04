@@ -87,12 +87,13 @@ npm start -- [workspace] [port] # same launcher; default port 4200, workspace ..
 
 曲カードのボタンで、**声・ドラム・ベース・その他への分離**(Demucs)と、**キック・スネア・ハイハットの時刻とテンポの解析**ができます。Suno の曲でも、ドラッグ&ドロップで追加した曲でも使えます。この PC の Python で動き、何も外へ送りません。アプリには同梱されず、使わなければ何も要りません。
 
-- 必要なもの: Python 3、ffmpeg、(分離には)Demucs。足りないものと導入コマンドは、左端の ⚙ 設定 > 音声ツール に出ます。ビート解析だけなら numpy と ffmpeg で動きます。
+- 必要なもの: Python 3、ffmpeg、(分離には)Demucs。左端の ⚙ 設定 > 音声ツール に状態が出て、**「音声ツールを導入する」ボタン 1 つ**で、専用環境の作成と Demucs・numpy の導入までを自動で行います(実行内容を確認してから開始、ログ表示、取り消し可。ワークスペースの `.mv-studio/venv` の中だけを変更し、他の Python には触れません。約 0.7 GB)。NVIDIA GPU があれば、GPU 版の PyTorch(+約 3 GB)も選べます。Python と ffmpeg は PC 全体に入れるものなので、コマンドを案内するだけです。ビート解析だけなら numpy と ffmpeg で動きます。
+- Windows では、ワークスペースのパスが深いと(目安 90 文字超)、PyTorch のファイルがパス長の上限に当たって導入に失敗することがあります。その場合は画面に警告が出ます。
 - 結果は曲の横のファイルです: `<曲>.stems/{vocals,drums,bass,other}.wav` と `<曲>.beats.json`。Claude は読めますが、書きません。
 - 分離しておくと、ビート解析はドラムのステムを使って、より正確になります。**BPM は推定値**です(倍・半分になりがち)。時刻のほうを信頼してください。
 - 分離は 1 本ずつ実行します。CPU でも動きます(曲 1 分で数十秒〜数分)。NVIDIA の GPU を使うには、PyTorch の CUDA 版が必要です。
 
-Song cards can **split a song into vocals / drums / bass / other** (Demucs) and **find kick / snare / hat times and a tempo estimate**, for Suno songs and for songs you drop in. Everything runs with the Python on your computer and nothing is uploaded; nothing is bundled, and you need none of it unless you use these buttons. Settings > Audio tools shows what is missing and the commands to get it (Python 3, ffmpeg, and Demucs for stems; the beat analysis needs only numpy and ffmpeg). Results are files beside the song (`<song>.stems/`, `<song>.beats.json`) that Claude can read but not write. The tempo is an estimate (double / half errors are common); trust the hit times.
+Song cards can **split a song into vocals / drums / bass / other** (Demucs) and **find kick / snare / hat times and a tempo estimate**, for Suno songs and for songs you drop in. Everything runs with the Python on your computer and nothing is uploaded; nothing is bundled, and you need none of it unless you use these buttons. Settings > Audio tools has a one-button setup that creates an environment inside the workspace (`.mv-studio/venv`) and installs Demucs and numpy there (shown and confirmed first, with a log and cancel; no other Python is touched; about 0.7 GB, plus about 3 GB if you choose the GPU build of PyTorch). Python 3 and ffmpeg are system-wide, so for those it only shows the commands. The beat analysis needs only numpy and ffmpeg. Results are files beside the song (`<song>.stems/`, `<song>.beats.json`) that Claude can read but not write. The tempo is an estimate (double / half errors are common); trust the hit times.
 
 ## セキュリティ / Security
 

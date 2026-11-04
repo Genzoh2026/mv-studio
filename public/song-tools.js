@@ -4,7 +4,8 @@
 import { toast } from "/toast.js";
 
 const KIND_LABELS = { separate: "分離", beats: "ビート解析" };
-const SETTINGS_HINT = "左端の ⚙ 設定 > 音声ツール に、必要なものと導入方法があります。";
+// The settings tool is the first button of the left rail; opening it shows the one-button setup.
+const openSettings = () => { const rail = document.querySelector(".rail-btn"); if (rail && !rail.classList.contains("on")) rail.click(); };
 
 const h = (tag, props = {}, ...children) => {
   const el = Object.assign(document.createElement(tag), props);
@@ -36,7 +37,7 @@ export function createSongTools({ getProject }) {
     const label = KIND_LABELS[kind];
     if (!tools) await loadTools();
     if (tools && !tools.ready[kind === "separate" ? "separate" : "beats"]) {
-      return toast(`${label}に必要なものが足りません。${SETTINGS_HINT}`, { key: "song-tool", kind: "warn" });
+      return toast(`${label}に必要なものが足りません。`, { key: "song-tool", kind: "warn", action: { label: "導入画面を開く", run: openSettings } });
     }
     const res = await post("/api/songs/process", { pj: getProject(), base: song.base, kind });
     const answer = await res.json();

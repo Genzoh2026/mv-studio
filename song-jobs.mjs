@@ -43,8 +43,9 @@ export async function listStems(stemBase, outputRoot) {
   return stems;
 }
 
-/** @param {{tools: ReturnType<import("./audio-tools.mjs").createAudioTools>, onChange?: () => void}} options */
-export function createSongJobs({ tools }) {
+/** @param {{tools: ReturnType<import("./audio-tools.mjs").createAudioTools>, blocked?: () => boolean}} options
+ *  `blocked` says the tools are being changed right now (a setup is running), so no job may start. */
+export function createSongJobs({ tools, blocked = () => false }) {
   const manager = createJobs({ run: (job, ctx) => runJob(job, ctx) });
 
   /** A Python "No module named X" is not something the user can act on; say what to do. */
@@ -94,6 +95,7 @@ export function createSongJobs({ tools }) {
     /** Queues a job after checking the song and the tools. Throws SongJobError with a message the page can show. */
     async enqueue({ pj, pjDir, base, kind }) {
       if (!KINDS.includes(kind)) throw new SongJobError(`kind: one of ${KINDS.join(", ")}`);
+      if (blocked()) throw new SongJobError("音声ツールの導入中です。終わってからやり直してください");
       const paths = await findSongAudio(pjDir, base);
       if (!paths) throw new SongJobError("this song has no audio file yet (download or add it first)");
       const status = await tools.status();

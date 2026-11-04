@@ -216,3 +216,8 @@ body.rail-collapsed #rail-handle { display: block; }
 .stem { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
 .stem-label { width: 64px; flex: none; color: var(--dim); font-size: 12px; }
 .stem audio { flex: 1; height: 32px; min-width: 0; }
+.setup-log { max-height: 220px; overflow: auto; margin: 6px 0; padding: 6px 8px; background: #0e1014; border: 1px solid var(--line); border-radius: 6px; font-size: 11px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.setup-cmd { margin: 2px 0 6px; padding: 4px 6px; background: #0e1014; border: 1px solid var(--line); border-radius: 6px; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.setup-gpu { display: block; margin: 8px 0; }
+.claude-box button.primary, .panel-actions button.primary, button.primary { background: #2f5f8f; border-color: #4a78a8; color: #fff; padding: 8px 14px; font-weight: 600; }
+.claude-box button, .panel-actions button { cursor: pointer; }

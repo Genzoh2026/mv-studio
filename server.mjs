@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { readAnalysisSummary, readBeatsSummary, readTimingsSummary } from "./analysis.mjs";
 import { createAudioTools } from "./audio-tools.mjs";
+import { createInstaller } from "./audio-install.mjs";
 import { createSongJobs, listStems } from "./song-jobs.mjs";
 import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
 import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listNumberedImages, saveImage } from "./images.mjs";
@@ -57,6 +58,7 @@ const STATIC = {
   "/upload.js": ["public/upload.js", "text/javascript"],
   "/trash.js": ["public/trash.js", "text/javascript"],
   "/song-tools.js": ["public/song-tools.js", "text/javascript"],
+  "/audio-tools-panel.js": ["public/audio-tools-panel.js", "text/javascript"],
   "/toast.js": ["public/toast.js", "text/javascript"],
   "/rail.js": ["public/rail.js", "text/javascript"],
   "/settings.js": ["public/settings.js", "text/javascript"],
@@ -110,7 +112,10 @@ function childEnv() {
 const sessions = createSessions({ command: SHELL, args: shellArgs, env: childEnv });
 // Song separation and beat analysis run in a Python found on this computer; nothing is bundled (see audio-tools.mjs).
 const audioTools = createAudioTools({ workspace: WORKSPACE, toolsDir: join(HERE, "tools") });
-const songJobs = createSongJobs({ tools: audioTools });
+// The installer and the song jobs exclude each other: pip may replace the very PyTorch a separation is using.
+let installer = null;
+const songJobs = createSongJobs({ tools: audioTools, blocked: () => Boolean(installer?.running()) });
+installer = createInstaller({ tools: audioTools, isBusy: () => songJobs.manager.busy() });
 
 /** Resolve a project name from the client to its folder, or null. The name must be a plain folder name under PJs. */
 function pjDir(name) {
@@ -450,6 +455,7 @@ function json(res, status, value) {
 function shutdown(code) {
   sessions.endAll();
   songJobs.manager.stopAll();
+  installer.cancel();
   setTimeout(() => process.exit(code), SHUTDOWN_DELAY_MS);
 }
 
@@ -590,6 +596,19 @@ const server = createServer(async (req, res) => {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
       return json(res, 200, await audioTools.setPython((await readBody(req)).path ?? null));
     }
+    if (url.pathname === "/api/audio-install" && req.method === "GET") return json(res, 200, installer.snapshot());
+    if (url.pathname === "/api/audio-install/plan" && req.method === "GET") return json(res, 200, await installer.preview({ gpu: url.searchParams.get("gpu") === "1" }));
+    if (url.pathname === "/api/audio-install/start" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      const body = await readBody(req);
+      // The page shows the plan and asks first; the server insists that it did.
+      if (body.confirmed !== true) return json(res, 400, { error: "the setup needs the user's confirmation" });
+      return json(res, 200, await installer.start({ gpu: body.gpu === true }));
+    }
+    if (url.pathname === "/api/audio-install/cancel" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      return json(res, 200, { cancelled: installer.cancel() });
+    }
     if (url.pathname === "/api/audio-tools/model" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
       return json(res, 200, await audioTools.setModel((await readBody(req)).model));
@@ -666,6 +685,6 @@ wss.on("connection", async (ws, req) => {
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => { sessions.endAll(); process.exit(0); });
 }
-process.on("exit", () => { sessions.endAll(); songJobs.manager.stopAll(); });
+process.on("exit", () => { sessions.endAll(); songJobs.manager.stopAll(); installer.cancel(); });
 
 server.listen(PORT, HOST, () => console.log(`MV Studio: http://${HOST}:${PORT}  (workspace: ${WORKSPACE})`));
