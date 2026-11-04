@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { readAnalysisSummary, readTimingsSummary } from "./analysis.mjs";
 import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
+import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listImages, saveImage, trashImages } from "./images.mjs";
 import { SessionLimitError, createSessions } from "./sessions.mjs";
 import { DOCS_URL, detectClaude, installCommands, installGuideText } from "./claude-cli.mjs";
 import { codeFingerprint } from "./version.mjs";
@@ -47,6 +48,7 @@ const STATIC = {
   "/": ["public/index.html", "text/html; charset=utf-8"],
   "/app.js": ["public/app.js", "text/javascript"],
   "/drafts.js": ["public/drafts.js", "text/javascript"],
+  "/images.js": ["public/images.js", "text/javascript"],
   "/toast.js": ["public/toast.js", "text/javascript"],
   "/rail.js": ["public/rail.js", "text/javascript"],
   "/settings.js": ["public/settings.js", "text/javascript"],
@@ -300,6 +302,50 @@ async function serveAudio(req, res, url) {
   }
 }
 
+const imageDir = (pjDirPath) => join(pjDirPath, "Output", "image");
+
+/** The raw bytes of an upload. Refused as soon as it is known to be over the limit. */
+async function readBinary(req, limit) {
+  if (Number(req.headers["content-length"]) > limit) throw new ImageError(`too large (max ${limit / 1024 / 1024} MB)`);
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) throw new ImageError(`too large (max ${limit / 1024 / 1024} MB)`);
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+/** Moves images to workspace\_Trash\images\<project>__<time>\ so a mistaken delete can be undone by hand. */
+async function trashProjectImages(pjName, names) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return trashImages(imageDir(pjDir(pjName)), join(TRASH, "images", `${pjName}__${stamp}`), names);
+}
+
+async function serveImage(res, url) {
+  const dir = await existingPjDir(url.searchParams.get("pj"));
+  const target = dir && imagePath(imageDir(dir), url.searchParams.get("name"));
+  if (!target) {
+    res.writeHead(403);
+    return res.end("forbidden");
+  }
+  try {
+    const { size } = await stat(target);
+    res.writeHead(200, {
+      "content-type": contentTypeOf(target),
+      "content-length": size,
+      "x-content-type-options": "nosniff",
+      // The page adds ?v=<mtime>, so a changed file gets a new URL.
+      "cache-control": "private, max-age=3600",
+    });
+    createReadStream(target).pipe(res);
+  } catch (err) {
+    res.writeHead(404);
+    res.end(`not found: ${err.code}`);
+  }
+}
+
 async function readBody(req, limit = MAX_BODY) {
   let body = "";
   for await (const chunk of req) {
@@ -368,6 +414,24 @@ const server = createServer(async (req, res) => {
       if (!dir) return json(res, 400, { error: "bad project" });
       return json(res, 200, { mtime: await saveHuman(dir, body.name, body.data, body.baseMtime) });
     }
+    if (url.pathname === "/api/images" && req.method === "GET") {
+      const dir = await existingPjDir(url.searchParams.get("pj"));
+      return dir ? json(res, 200, await listImages(imageDir(dir))) : json(res, 400, { error: "bad project" });
+    }
+    if (url.pathname === "/api/images/upload" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      const dir = await existingPjDir(url.searchParams.get("pj"));
+      if (!dir) return json(res, 400, { error: "bad project" });
+      const bytes = await readBinary(req, MAX_IMAGE_BYTES);
+      return json(res, 200, { name: await saveImage(imageDir(dir), url.searchParams.get("name"), bytes) });
+    }
+    if (url.pathname === "/api/images/trash" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      const body = await readBody(req, MAX_DRAFT_BODY);
+      if (!(await existingPjDir(body.pj))) return json(res, 400, { error: "bad project" });
+      return json(res, 200, await trashProjectImages(body.pj, body.names));
+    }
+    if (url.pathname === "/image" && req.method === "GET") return serveImage(res, url);
     if (url.pathname === "/api/server" && req.method === "GET") {
       return json(res, 200, {
         pid: process.pid,

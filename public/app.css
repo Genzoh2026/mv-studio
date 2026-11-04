@@ -13,6 +13,7 @@ header input, header button { background: var(--panel); color: inherit; border: 
 header button { cursor: pointer; }
 #new-pj { display: flex; gap: 4px; margin-left: auto; }
 #library, #songs, #drafts { overflow-y: auto; padding: 16px; flex: 1; }
+#images { display: flex; flex-direction: column; gap: 8px; padding: 16px; flex: 1; min-height: 0; }
 #library { padding-bottom: 96px; } /* room for the floating selection bar */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
 .pj-card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; cursor: pointer; }
@@ -130,3 +131,42 @@ body.rail-collapsed #rail-handle { display: block; }
 .cmd pre { margin: 2px 0 4px; padding: 6px 8px; background: #0e1014; border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
 .song-head .dl { background: transparent; color: #7cc4ff; border: 1px solid #3a5a7a; border-radius: 6px; padding: 0 10px; font: inherit; font-size: 12px; cursor: pointer; }
 .song-head .dl:hover { background: #22303f; }
+
+/* ---- image library ---- */
+.img-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.img-toolbar input[type=search] { flex: 1 1 160px; min-width: 120px; background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font: inherit; }
+.img-toolbar button, .img-bar button, .img-viewer button { background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font: inherit; cursor: pointer; }
+.img-views { display: inline-flex; }
+.img-views button { border-radius: 0; margin-left: -1px; padding: 4px 8px; }
+.img-views button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+.img-views button:last-child { border-radius: 0 6px 6px 0; }
+.img-views button.on { background: #22303f; border-color: #4a78a8; position: relative; }
+.img-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 10px; background: #2a2220; border: 1px solid #5a3a30; border-radius: 8px; }
+.img-bar button.danger { background: #7a2e2e; border-color: #a54343; }
+.img-body { flex: 1; min-height: 0; overflow-y: auto; }
+.img-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(var(--tile, 180px), 1fr)); }
+.img-grid.large { --tile: 280px; }
+.img-grid.medium { --tile: 180px; }
+.img-grid.small { --tile: 110px; }
+.img-card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px; cursor: pointer; min-width: 0; }
+.img-card:hover, .img-card:focus-visible { border-color: #4a78a8; outline: none; }
+.img-card.on { border-color: #d9534f; }
+.img-card .thumb { aspect-ratio: 1; font-size: 14px; }
+.img-card .pick { opacity: 0; }
+.img-card:hover .pick, .img-card.on .pick, .img-card:focus-within .pick { opacity: 1; }
+.img-name { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.img-grid.small .meta { display: none; }
+.img-grid.small .img-name { font-size: 12px; }
+.img-grid.list { grid-template-columns: 1fr; gap: 4px; }
+.img-grid.list .img-card { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 4px 8px; }
+.img-grid.list .thumb { width: 56px; aspect-ratio: 1; }
+.img-grid.list .img-name { margin: 0; }
+.img-grid.list .pick { top: 2px; left: 2px; width: 14px; height: 14px; }
+.img-drop { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; background: #14161acc; border: 3px dashed #4a78a8; font-size: 18px; pointer-events: none; }
+.img-viewer { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; background: #0b0c0fee; }
+.img-viewer header { border-bottom: 1px solid var(--line); }
+.img-viewer .spacer { flex: 1; }
+.img-stage { flex: 1; min-height: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 12px; }
+.img-stage img { max-width: 100%; max-height: 100%; min-height: 0; justify-self: center; object-fit: contain; }
+.img-stage .nav { font-size: 28px; line-height: 1; padding: 8px 12px; }
+.img-stage .nav:disabled { opacity: 0.3; cursor: default; }

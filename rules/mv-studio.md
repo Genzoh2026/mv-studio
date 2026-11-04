@@ -7,6 +7,9 @@ songs on the right. The current directory is ONE MV project. These rules are sup
 
 - Everything you produce goes under `Output/<kind>/` (songs: `Output/song/`). Drafts go under `Drafts/`.
   The app only shows `Output/` and `Drafts/`; do not put assets anywhere else.
+- `Output/image/` is the image library. The user drops their own images there through the app; read them freely
+  (look at them with the Read tool), but NEVER modify, rename or delete them. Images you create go to the same
+  folder under a new name (png, jpg, webp or gif; the app does not show other formats).
 
 ## Songs: preview first, download only on request
 

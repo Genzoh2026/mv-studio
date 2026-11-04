@@ -1,4 +1,5 @@
 import { createDraftsTab } from "/drafts.js";
+import { createImagesTab } from "/images.js";
 import { toast } from "/toast.js";
 import { createRail } from "/rail.js";
 import { settingsTool } from "/settings.js";
@@ -483,16 +484,21 @@ setInterval(pollClaudeStatus, RAIL_POLL_MS);
 
 const draftsTab = createDraftsTab({ root: $("drafts"), getProject: () => viewing, typeToTerminal, isClaudeReady: () => claudeReady });
 
+const imagesTab = createImagesTab({ root: $("images"), getProject: () => viewing });
+// The panes inside a project, by the data-tab of their button.
+const tabBoxes = { drafts: $("drafts"), songs: songsBox, images: $("images") };
+
 function showTab(next) {
   tab = next;
   for (const button of document.querySelectorAll("#tabs button")) button.classList.toggle("on", button.dataset.tab === next);
-  $("drafts").hidden = next !== "drafts";
-  songsBox.hidden = next !== "songs";
+  for (const [id, box] of Object.entries(tabBoxes)) box.hidden = id !== next;
   songsKey = null;
+  imagesTab.reset();
   refreshActiveTab();
 }
 
-const refreshActiveTab = () => (tab === "songs" ? refreshSongs() : draftsTab.refresh());
+const refreshers = { songs: () => refreshSongs(), images: () => imagesTab.refresh(), drafts: () => draftsTab.refresh() };
+const refreshActiveTab = () => refreshers[tab]();
 
 function showLibrary() {
   viewing = "";
@@ -500,8 +506,7 @@ function showLibrary() {
   libraryBox.hidden = false;
   $("pj-header").hidden = true;
   $("tabs").hidden = true;
-  $("drafts").hidden = true;
-  songsBox.hidden = true;
+  for (const box of Object.values(tabBoxes)) box.hidden = true;
   libraryKey = null;
   loadLibrary();
 }
