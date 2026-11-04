@@ -11,6 +11,7 @@ import { readAnalysisSummary, readTimingsSummary } from "./analysis.mjs";
 import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
 import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listNumberedImages, saveImage, trashImages } from "./images.mjs";
 import { listNumberedVideos, trashVideos, videoContentType, videoPath } from "./videos.mjs";
+import { AudioError, MAX_AUDIO_BYTES, saveAudioStream } from "./audio.mjs";
 import { SessionLimitError, createSessions } from "./sessions.mjs";
 import { DOCS_URL, detectClaude, installCommands, installGuideText } from "./claude-cli.mjs";
 import { codeFingerprint } from "./version.mjs";
@@ -50,6 +51,7 @@ const STATIC = {
   "/app.js": ["public/app.js", "text/javascript"],
   "/drafts.js": ["public/drafts.js", "text/javascript"],
   "/media-library.js": ["public/media-library.js", "text/javascript"],
+  "/upload.js": ["public/upload.js", "text/javascript"],
   "/toast.js": ["public/toast.js", "text/javascript"],
   "/rail.js": ["public/rail.js", "text/javascript"],
   "/settings.js": ["public/settings.js", "text/javascript"],
@@ -547,6 +549,13 @@ const server = createServer(async (req, res) => {
         return json(res, 400, { error: `text: 1-${MAX_TYPED} characters, no control characters` });
       }
       return sessions.type(pj, text) ? json(res, 200, { typed: true }) : json(res, 409, { error: "no running session for this project" });
+    }
+    if (url.pathname === "/api/songs/upload" && req.method === "POST") {
+      if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      const dir = await existingPjDir(url.searchParams.get("pj"));
+      if (!dir) return json(res, 400, { error: "bad project" });
+      if (Number(req.headers["content-length"]) > MAX_AUDIO_BYTES) throw new AudioError(`too large (max ${MAX_AUDIO_BYTES / 1024 / 1024} MB)`);
+      return json(res, 200, { name: await saveAudioStream(join(dir, "Output", "song"), url.searchParams.get("name"), req) });
     }
     if (url.pathname === "/api/songs") {
       if (!pjDir(url.searchParams.get("pj"))) return json(res, 400, { error: "bad project" });

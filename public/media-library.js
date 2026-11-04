@@ -2,12 +2,12 @@
 // with its provenance, trash some, and (images only) add files by drag and drop. The folder is the source of truth;
 // this tab lists it, re-rendering only when it changes, and adds or trashes files.
 import { toast } from "/toast.js";
+import { attachDropZone, uploadFiles } from "/upload.js";
 
 const VIEWS = [["large", "大"], ["medium", "中"], ["small", "小"], ["list", "リスト"]];
 const DEFAULT_VIEW = "medium";
 const MAX_FILES_PER_DROP = 30;
 const MAX_BYTES = 30 * 1024 * 1024;
-const SHOWN_ERRORS = 3;
 const GEN_KIND_LABELS = { still: "静止画", cut: "カット", final: "完成" };
 const INPUT_LABELS = { song: "曲", image: "画像", video: "動画" };
 
@@ -34,7 +34,6 @@ const h = (tag, props = {}, ...children) => {
 
 const formatSize = (bytes) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 const formatDate = (ms) => new Date(ms).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" });
-const hasFiles = (event) => [...(event.dataTransfer?.types ?? [])].includes("Files");
 
 /**
  * @param {{root: HTMLElement, getProject: () => string, kind: "image"|"video",
@@ -91,54 +90,19 @@ export function createMediaLibrary({ root, getProject, kind, openOther }) {
 
   // ---- adding (images) ----
   async function upload(files) {
-    const list = [...files];
-    if (!list.length || !project) return;
-    if (list.length > MAX_FILES_PER_DROP) {
-      toast(`一度に追加できるのは ${MAX_FILES_PER_DROP} 枚までです(${list.length} 枚選ばれました)`, { key: "img-limit", kind: "warn" });
-      list.length = MAX_FILES_PER_DROP;
-    }
     const target = project;
-    const failures = [];
-    let added = 0;
-    uploading += list.length;
-    renderBar();
-    for (const file of list) {
-      if (file.size > MAX_BYTES) {
-        failures.push(`${file.name}: 大きすぎます(上限 ${MAX_BYTES / 1024 / 1024} MB)`);
-      } else {
-        try {
-          const res = await fetch(`${cfg.api}/upload?pj=${encodeURIComponent(target)}&name=${encodeURIComponent(file.name)}`, { method: "POST", body: file });
-          if (res.ok) added++;
-          else failures.push(`${file.name}: ${(await res.json()).error}`);
-        } catch (err) {
-          failures.push(`${file.name}: ${err.message}`);
-        }
-      }
-      uploading--;
-      renderBar();
-    }
-    if (added) toast(`${added} 枚を追加しました`, { key: "img-added" });
-    if (failures.length) {
-      const more = failures.length > SHOWN_ERRORS ? ` ほか ${failures.length - SHOWN_ERRORS} 件` : "";
-      toast(`追加できませんでした: ${failures.slice(0, SHOWN_ERRORS).join(" / ")}${more}`, { key: "img-failed", kind: "error" });
-    }
+    if (!target) return;
+    await uploadFiles({
+      files, unit: "枚", maxFiles: MAX_FILES_PER_DROP, maxBytes: MAX_BYTES, toastKey: "img",
+      urlFor: (name) => `${cfg.api}/upload?pj=${encodeURIComponent(target)}&name=${encodeURIComponent(name)}`,
+      onProgress: (remaining) => { uploading = remaining; renderBar(); },
+    });
     if (project === target) await refresh(true);
   }
 
   if (cfg.upload) {
     picker.addEventListener("change", () => { upload(picker.files); picker.value = ""; });
-    // Without this, a file dropped slightly off the target would make the browser leave the app to show the image.
-    addEventListener("dragover", (event) => { if (hasFiles(event)) event.preventDefault(); });
-    addEventListener("drop", (event) => { if (hasFiles(event)) event.preventDefault(); });
-    let dragDepth = 0;
-    root.addEventListener("dragenter", (event) => { if (hasFiles(event)) { dragDepth++; dropMask.hidden = false; } });
-    root.addEventListener("dragleave", (event) => { if (hasFiles(event) && --dragDepth <= 0) { dragDepth = 0; dropMask.hidden = true; } });
-    root.addEventListener("drop", (event) => {
-      if (!hasFiles(event)) return;
-      dragDepth = 0;
-      dropMask.hidden = true;
-      upload(event.dataTransfer.files);
-    });
+    attachDropZone(root, dropMask, upload);
   }
 
   // ---- trash ----

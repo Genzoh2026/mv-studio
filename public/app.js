@@ -1,5 +1,6 @@
 import { createDraftsTab } from "/drafts.js";
 import { createMediaLibrary } from "/media-library.js";
+import { attachDropZone, uploadFiles } from "/upload.js";
 import { toast } from "/toast.js";
 import { createRail } from "/rail.js";
 import { settingsTool } from "/settings.js";
@@ -283,10 +284,35 @@ async function refreshSongs() {
   if (key === songsKey) return;
   songsKey = key;
   if (!songs.length) {
-    return songsBox.replaceChildren(note("曲はまだありません。左の Claude に「Suno で曲を作って、試聴用に保存して」と頼んでください。"));
+    return songsList.replaceChildren(note("曲はまだありません。ここへ曲(mp3・wav・m4a・ogg)をドラッグ&ドロップするか、左の Claude に「Suno で曲を作って、試聴用に保存して」と頼んでください。"));
   }
-  songsBox.replaceChildren(...songs.map(songCard));
+  songsList.replaceChildren(...songs.map(songCard));
 }
+
+// Adding songs from outside the app (a file already on this computer): drop them on the tab or pick them.
+const MAX_SONG_FILES = 10;
+const MAX_SONG_BYTES = 200 * 1024 * 1024;
+const songsList = document.createElement("div");
+const songsDrop = Object.assign(document.createElement("div"), { className: "img-drop", hidden: true, textContent: "ここにドロップして追加" });
+const songsPicker = Object.assign(document.createElement("input"), { type: "file", multiple: true, hidden: true, accept: "audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,audio/ogg,.mp3,.wav,.m4a,.ogg" });
+const songsAdd = Object.assign(document.createElement("button"), { type: "button", textContent: "+ 曲を追加", onclick: () => songsPicker.click() });
+const songsProgress = Object.assign(document.createElement("span"), { className: "meta" });
+const songsToolbar = Object.assign(document.createElement("div"), { className: "img-toolbar" });
+songsToolbar.append(songsAdd, songsProgress, songsPicker);
+songsBox.append(songsToolbar, songsList, songsDrop);
+
+async function addSongs(files) {
+  const target = viewing;
+  if (!target) return;
+  await uploadFiles({
+    files, unit: "曲", maxFiles: MAX_SONG_FILES, maxBytes: MAX_SONG_BYTES, toastKey: "song",
+    urlFor: (name) => `/api/songs/upload?pj=${encodeURIComponent(target)}&name=${encodeURIComponent(name)}`,
+    onProgress: (remaining) => { songsProgress.textContent = remaining ? `追加中… 残り ${remaining} 曲` : ""; },
+  });
+  if (viewing === target) { songsKey = null; await refreshSongs(); }
+}
+songsPicker.addEventListener("change", () => { addSongs(songsPicker.files); songsPicker.value = ""; });
+attachDropZone(songsBox, songsDrop, addSongs);
 
 function songCard(song) {
   const el = document.createElement("section");
