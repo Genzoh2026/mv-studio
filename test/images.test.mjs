@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ImageError, MAX_IMAGE_BYTES, cleanStem, imagePath, listImages, saveImage, sniffImage, trashImages } from "../images.mjs";
+import { ImageError, MAX_IMAGE_BYTES, cleanStem, imagePath, listImages, listNumberedImages, saveImage, sniffImage, trashImages } from "../images.mjs";
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 const JPG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0]);
@@ -84,5 +84,67 @@ test("trashImages moves valid files, keeps bytes, and reports bad names without 
     assert.ok(!existsSync(join(dir, name)));
     assert.deepEqual(await readFile(join(trash, name)), JPG);
     await assert.rejects(trashImages(dir, trash, []), ImageError);
+  });
+});
+
+const idsByName = (list) => Object.fromEntries(list.map((i) => [i.name, i.id]));
+
+test("numbering: ids start at 1, follow file age for a batch, and stay stable", async () => {
+  await scratch(async (dir) => {
+    for (const [name, secondsAgo] of [["newer.png", 10], ["older.png", 100]]) {
+      await writeFile(join(dir, name), PNG);
+      const t = new Date(Date.now() - secondsAgo * 1000);
+      await utimes(join(dir, name), t, t);
+    }
+    assert.deepEqual(idsByName(await listNumberedImages(dir)), { "older.png": 1, "newer.png": 2 });
+    await writeFile(join(dir, "third.png"), PNG);
+    assert.deepEqual(idsByName(await listNumberedImages(dir)), { "older.png": 1, "newer.png": 2, "third.png": 3 });
+    assert.deepEqual(idsByName(await listNumberedImages(dir)), { "older.png": 1, "newer.png": 2, "third.png": 3 });
+  });
+});
+
+test("numbering: a removed image leaves a gap and its id is never reused", async () => {
+  await scratch(async (dir) => {
+    await writeFile(join(dir, "a.png"), PNG);
+    await writeFile(join(dir, "b.png"), PNG);
+    await listNumberedImages(dir);
+    await rm(join(dir, "b.png"));
+    assert.deepEqual(idsByName(await listNumberedImages(dir)), { "a.png": 1 });
+    await writeFile(join(dir, "c.png"), PNG);
+    assert.deepEqual(idsByName(await listNumberedImages(dir)), { "a.png": 1, "c.png": 3 });
+    // The same name coming back after a sync is a new picture, so it is a new id.
+    await rm(join(dir, "a.png"));
+    await listNumberedImages(dir);
+    await writeFile(join(dir, "a.png"), JPG);
+    assert.equal(idsByName(await listNumberedImages(dir))["a.png"], 4);
+  });
+});
+
+test("numbering: simultaneous requests never hand out the same id", async () => {
+  await scratch(async (dir) => {
+    for (const name of ["a.png", "b.png", "c.png", "d.png"]) await writeFile(join(dir, name), PNG);
+    const results = await Promise.all(Array.from({ length: 8 }, () => listNumberedImages(dir)));
+    const ids = results[0].map((i) => i.id).sort();
+    assert.deepEqual(ids, [1, 2, 3, 4]);
+    for (const result of results) assert.deepEqual(idsByName(result), idsByName(results[0]));
+  });
+});
+
+test("numbering: an unreadable ledger is kept aside and numbering restarts instead of being overwritten", async () => {
+  await scratch(async (dir) => {
+    await writeFile(join(dir, "a.png"), PNG);
+    await writeFile(join(dir, "index.json"), "{ not json");
+    assert.deepEqual(idsByName(await listNumberedImages(dir)), { "a.png": 1 });
+    const kept = (await readdir(dir)).filter((n) => n.startsWith("index.broken-"));
+    assert.equal(kept.length, 1);
+    assert.equal(await readFile(join(dir, kept[0]), "utf8"), "{ not json");
+  });
+});
+
+test("numbering: a missing folder is an empty library and no ledger is created", async () => {
+  await scratch(async (root) => {
+    const dir = join(root, "none");
+    assert.deepEqual(await listNumberedImages(dir), []);
+    assert.deepEqual(await readdir(root), []);
   });
 });

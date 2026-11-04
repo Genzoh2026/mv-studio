@@ -10,6 +10,10 @@ songs on the right. The current directory is ONE MV project. These rules are sup
 - `Output/image/` is the image library. The user drops their own images there through the app; read them freely
   (look at them with the Read tool), but NEVER modify, rename or delete them. Images you create go to the same
   folder under a new name (png, jpg, webp or gif; the app does not show other formats).
+- Every image has an id (1, 2, 3, ...), shown in the app as `#3`. The ledger is `Output/image/index.json`
+  (`items: [{id, name}]`); only the app writes it. When the user says "image 3", "画像3" or "#3", look the id up there
+  and use that file. If the id is missing, the image was trashed or never seen by the app: say so instead of guessing.
+  A file you just saved has no id until the app notices it, so refer to your own new images by file name.
 
 ## Songs: preview first, download only on request
 

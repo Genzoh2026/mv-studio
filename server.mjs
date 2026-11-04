@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import { readAnalysisSummary, readTimingsSummary } from "./analysis.mjs";
 import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
-import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listImages, saveImage, trashImages } from "./images.mjs";
+import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listNumberedImages, saveImage, trashImages } from "./images.mjs";
 import { SessionLimitError, createSessions } from "./sessions.mjs";
 import { DOCS_URL, detectClaude, installCommands, installGuideText } from "./claude-cli.mjs";
 import { codeFingerprint } from "./version.mjs";
@@ -320,7 +320,11 @@ async function readBinary(req, limit) {
 /** Moves images to workspace\_Trash\images\<project>__<time>\ so a mistaken delete can be undone by hand. */
 async function trashProjectImages(pjName, names) {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return trashImages(imageDir(pjDir(pjName)), join(TRASH, "images", `${pjName}__${stamp}`), names);
+  const dir = imageDir(pjDir(pjName));
+  const result = await trashImages(dir, join(TRASH, "images", `${pjName}__${stamp}`), names);
+  // Retire the moved files' ids now, so a new file with the same name cannot inherit one.
+  await listNumberedImages(dir);
+  return result;
 }
 
 async function serveImage(res, url) {
@@ -416,14 +420,17 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === "/api/images" && req.method === "GET") {
       const dir = await existingPjDir(url.searchParams.get("pj"));
-      return dir ? json(res, 200, await listImages(imageDir(dir))) : json(res, 400, { error: "bad project" });
+      return dir ? json(res, 200, await listNumberedImages(imageDir(dir))) : json(res, 400, { error: "bad project" });
     }
     if (url.pathname === "/api/images/upload" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
       const dir = await existingPjDir(url.searchParams.get("pj"));
       if (!dir) return json(res, 400, { error: "bad project" });
       const bytes = await readBinary(req, MAX_IMAGE_BYTES);
-      return json(res, 200, { name: await saveImage(imageDir(dir), url.searchParams.get("name"), bytes) });
+      await listNumberedImages(imageDir(dir)); // files removed outside the app give up their ids before the new one is saved
+      const name = await saveImage(imageDir(dir), url.searchParams.get("name"), bytes);
+      const id = (await listNumberedImages(imageDir(dir))).find((image) => image.name === name)?.id;
+      return json(res, 200, { name, id });
     }
     if (url.pathname === "/api/images/trash" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });

@@ -32,7 +32,7 @@ export function createImagesTab({ root, getProject }) {
   let opened = null;        // file name shown large
   let uploading = 0;
 
-  const filterInput = h("input", { placeholder: "ファイル名で絞り込み", autocomplete: "off", type: "search" });
+  const filterInput = h("input", { placeholder: "ファイル名・番号(#3)で絞り込み", autocomplete: "off", type: "search" });
   filterInput.setAttribute("aria-label", "画像を絞り込み");
   const picker = h("input", { type: "file", multiple: true, accept: "image/png,image/jpeg,image/webp,image/gif", hidden: true });
   const addButton = h("button", { type: "button", textContent: "+ 画像を追加", onclick: () => picker.click() });
@@ -46,7 +46,8 @@ export function createImagesTab({ root, getProject }) {
 
   const post = (path, payload) => fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
   const src = (image) => `/image?pj=${encodeURIComponent(project)}&name=${encodeURIComponent(image.name)}&v=${Math.round(image.mtime)}`;
-  const shown = () => images.filter((image) => image.name.toLowerCase().includes(filter));
+  // "3" or "#3" finds image #3; anything else matches file names.
+  const shown = () => images.filter((image) => image.name.toLowerCase().includes(filter) || String(image.id) === filter);
 
   function setView(next) {
     view = next;
@@ -159,7 +160,8 @@ export function createImagesTab({ root, getProject }) {
     const check = h("input", { type: "checkbox", className: "pick", checked: selected.has(image.name), title: "選択(Shift で範囲選択)" });
     check.setAttribute("aria-label", `${image.name} を選択`);
     check.addEventListener("click", (event) => { event.stopPropagation(); pick(image, index, event); });
-    const thumb = h("div", { className: "thumb" }, h("img", { src: src(image), alt: image.name, loading: "lazy" }), check);
+    const thumb = h("div", { className: "thumb" }, h("img", { src: src(image), alt: image.name, loading: "lazy" }), check,
+      h("span", { className: "img-id", textContent: `#${image.id}`, title: `Claude には「画像${image.id}」または「#${image.id}」で指示できます` }));
     const el = h("div", { className: "img-card", tabIndex: 0, role: "button" }, thumb,
       h("div", { className: "img-name", textContent: image.name, title: image.name }),
       h("div", { className: "meta", textContent: `${formatSize(image.size)} · ${formatDate(image.mtime)}` }));
@@ -210,7 +212,7 @@ export function createImagesTab({ root, getProject }) {
     const many = list.length > 1;
     viewer.hidden = false;
     viewer.replaceChildren(
-      h("header", {}, h("strong", { textContent: image.name }), info,
+      h("header", {}, h("span", { className: "img-id inline", textContent: `#${image.id}` }), h("strong", { textContent: image.name }), info,
         h("span", { className: "spacer" }),
         h("button", { type: "button", textContent: "ごみ箱へ", onclick: async () => { close(); await trash([image.name]); } }),
         h("button", { type: "button", textContent: "✕", title: "閉じる(Esc)", onclick: close })),
@@ -230,7 +232,7 @@ export function createImagesTab({ root, getProject }) {
   });
 
   filterInput.addEventListener("input", () => {
-    filter = filterInput.value.trim().toLowerCase();
+    filter = filterInput.value.trim().toLowerCase().replace(/^#/, "");
     key = null;
     render();
   });
@@ -255,7 +257,7 @@ export function createImagesTab({ root, getProject }) {
     images = await res.json();
     const names = new Set(images.map((image) => image.name));
     for (const name of selected) if (!names.has(name)) selected.delete(name);
-    const next = JSON.stringify([pj, view, filter, [...selected], images.map((i) => [i.name, i.mtime, i.size])]);
+    const next = JSON.stringify([pj, view, filter, [...selected], images.map((i) => [i.id, i.name, i.mtime, i.size])]);
     if (!force && next === key) return;
     key = next;
     render();
