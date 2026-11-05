@@ -54,6 +54,7 @@ test("the probe reports a Demucs that fails to import, and the app will not call
     assert.equal(status.demucs, "9.9.9");
     assert.match(status.demucsError, /a_package_nobody_has/);
     assert.equal(status.ready.separate, false);
-    assert.match(status.install[0].command, /pip install a_package_nobody_has$/);
+    // Not necessarily the first step: a machine without ffmpeg lists the ffmpeg install first.
+    assert.ok(status.install.some((step) => /pip install a_package_nobody_has$/.test(step.command)), JSON.stringify(status.install.map((step) => step.command)));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
