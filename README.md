@@ -6,7 +6,7 @@
 A local app: a real **Claude Code terminal** on the left, and the **assets and results of a music video** on the right.
 Write lyrics and style with Claude and make songs with Suno, keep songs, images and videos in libraries, and pin comments on a video to tell Claude what to fix.
 
-> Status: early. Verified on Windows only. / 初期段階です。動作確認は Windows のみです。
+> Status: early. **Windows 10/11 only.** macOS and Linux are not supported and not tested; if you want to run it there, you are welcome to adapt it yourself (MIT). / 初期段階です。**Windows 10/11 専用**です。macOS・Linux は対象外で、動作も確認していません(使いたい方は MIT ライセンスの範囲でご自由に改造してください)。
 
 ### できること / What it does
 
@@ -22,7 +22,7 @@ Write lyrics and style with Claude and make songs with Suno, keep songs, images 
 
 ## 使い方 / Quick start
 
-必要なもの / Requirements: Node.js 20+, [Claude Code](https://code.claude.com/docs/en/setup), a Suno account.
+必要なもの / Requirements: Windows 10/11, Node.js 20+, [Claude Code](https://code.claude.com/docs/en/setup), a Suno account.
 
 **Claude Code の導入(まだの場合)** — 公式の手順は [こちら](https://code.claude.com/docs/en/setup)。
 
@@ -30,8 +30,6 @@ Write lyrics and style with Claude and make songs with Suno, keep songs, images 
 |---|---|
 | Windows (PowerShell) | `irm https://claude.ai/install.ps1 \| iex` |
 | Windows (WinGet) | `winget install Anthropic.ClaudeCode` |
-| macOS / Linux / WSL | `curl -fsSL https://claude.ai/install.sh \| bash` |
-| macOS (Homebrew) | `brew install --cask claude-code` |
 
 導入後、新しいターミナルで `claude --version` を実行して確認します。初回は `claude` を起動して、ブラウザでログインします(Pro / Max / Team / Enterprise / Console のいずれかが必要です)。
 
@@ -124,7 +122,7 @@ Open a video in the video library, turn on "ピンを打つ" and click the pictu
 
 ## 既知の制限 / Known limits
 
-- Windows 以外(macOS / Linux)は未確認です。`Output`(大文字)と `output`(小文字)は、Windows では同じフォルダ扱いです。
+- Windows 専用です(macOS / Linux は対象外)。`Output`(大文字)と `output`(小文字)は、Windows では同じフォルダ扱いです。
 - Suno にサインインしていないブラウザで、非公開曲の埋め込みが再生できるかは未確認です。
 - 「完成させて生成まで任せる」「この案で生成」は、Suno の生成枠を使うため、開発中は通しで検証できていません。
 - Claude が `Drafts/*.claude.json` や `suno.json` を、ルールどおりに書くことに依存しています(壊れていた場合は、画面にエラーを出し、ファイルには触れません)。

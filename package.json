@@ -1,7 +1,8 @@
 {
   "name": "mv-studio",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
+  "os": ["win32"],
   "description": "Claude Code terminal on the left, Suno songs from the work folder on the right",
   "type": "module",
   "engines": { "node": ">=20" },
