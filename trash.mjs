@@ -264,7 +264,7 @@ function orderForRemoval(items) {
 // Only these suffixes travel with a file (so "x" never drags "x.other.mp3" along).
 const SONG_SUFFIXES = [".mp3", ".wav", ".m4a", ".ogg", ".suno.json", ".analysis.json", ".lyrics.json", ".beats.json", ".gen.json", ".lrc", ".txt", ".md", ".stems"];
 const SONG_CORE = [".mp3", ".wav", ".m4a", ".ogg", ".suno.json"]; // a set without one of these is not a song (it could be a note)
-const MEDIA_SIDECARS = [".gen.json"];
+const MEDIA_SIDECARS = [".gen.json", ".review.json", ".review.md"];
 
 /**
  * Trashes images or videos by file name, each with its provenance file. Bad or missing names are reported, not fatal.

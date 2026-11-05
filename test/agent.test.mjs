@@ -100,7 +100,7 @@ test("MCP: handshake, tool list, and a song list with the ids and files Claude n
     const init = await client.request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "0" } });
     assert.equal(init.result.serverInfo.name, "mv-studio");
     const list = await client.request("tools/list");
-    assert.deepEqual(list.result.tools.map((t) => t.name), ["list_songs", "separate_song", "analyze_beats", "job_status", "wait_for_job", "cancel_job", "list_video_tools", "audio_tools_status", "setup_audio_tools"]);
+    assert.deepEqual(list.result.tools.map((t) => t.name), ["list_songs", "separate_song", "analyze_beats", "job_status", "wait_for_job", "cancel_job", "list_review_pins", "resolve_review_pins", "list_video_tools", "audio_tools_status", "setup_audio_tools"]);
     assert.ok(list.result.tools.every((t) => t.description && t.inputSchema.type === "object"));
     const { data } = await client.tool("list_songs");
     const third = data.songs.find((s) => s.id === 3);

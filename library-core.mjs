@@ -10,7 +10,7 @@ const emptyIndex = () => ({ version: 1, next: 1, items: [] });
 const locks = new Map();
 
 /** Runs tasks for one folder one at a time, so two requests can never hand out the same id. */
-function withLock(dir, task) {
+export function withLock(dir, task) {
   const run = (locks.get(dir) ?? Promise.resolve()).then(task);
   locks.set(dir, run.catch(() => {}));
   return run;

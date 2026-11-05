@@ -3,6 +3,7 @@
 // Claude cannot trash or delete anything through here, and cannot reach other projects.
 
 import { describeCatalog } from "./catalog.mjs";
+import { ReviewError, markDone, readReview } from "./review.mjs";
 
 const PREFIX = "/api/agent/";
 const ACTIVE = ["queued", "running"];
@@ -22,13 +23,27 @@ export function resolveSong(songs, ref) {
   throw new Error(matches.length ? `"${name}" matches ${matches.length} songs; use the id instead` : `no song named "${name}" (use list_songs to see the ids)`);
 }
 
+/** The video a reference points to: "3", "#3", 3 or a file name. */
+export function resolveVideo(videos, ref) {
+  if (typeof ref === "number" || /^#?\d+$/.test(String(ref ?? "").trim())) {
+    const id = Number(String(ref).replace("#", ""));
+    const found = videos.find((video) => video.id === id);
+    if (!found) throw new ReviewError(`there is no video #${id} in this project`);
+    return found;
+  }
+  const name = String(ref ?? "").trim();
+  const found = videos.find((video) => video.name === name);
+  if (!found) throw new ReviewError(`no video named "${name}" (give its id like 3, or the file name)`);
+  return found;
+}
+
 /**
  * @param {{auth: {verify: (pj: string, token: string) => boolean}, existingPjDir: (pj: string) => Promise<string|null>,
  *   listNumberedSongs: (pj: string) => Promise<object[]>, songJobs: object, installer: object, audioTools: object,
  *   readBody: (req: import("node:http").IncomingMessage) => Promise<any>, json: (res: any, status: number, value: unknown) => void}} deps
  * @returns {(req: import("node:http").IncomingMessage, res: any, url: URL) => Promise<boolean>} true when the request was handled
  */
-export function createAgentApi({ auth, existingPjDir, listNumberedSongs, songJobs, installer, audioTools, readBody, json, catalog = null, getPlugins = async () => null }) {
+export function createAgentApi({ listVideos = async () => [], videoDirOf = (dir) => dir, auth, existingPjDir, listNumberedSongs, songJobs, installer, audioTools, readBody, json, catalog = null, getPlugins = async () => null }) {
   /** One song as Claude needs it: where its files are (relative to the project) and what exists. */
   const describe = (song, jobs) => ({
     id: song.id,
@@ -82,6 +97,30 @@ export function createAgentApi({ auth, existingPjDir, listNumberedSongs, songJob
       // The user authorised this once in the rules: when the audio tools are missing, Claude sets them up (same steps as the
       // Settings button: only the workspace environment is changed). The GPU build is only for when the user asked for it.
       return ok(await installer.start({ gpu: body.gpu === true }));
+    }
+    if (route === "review" && req.method === "GET") {
+      try {
+        const video = resolveVideo(await listVideos(dir), url.searchParams.get("video"));
+        const review = await readReview(videoDirOf(dir), video.name);
+        return ok({ video: video.name, id: video.id, pins: review.pins });
+      } catch (err) {
+        if (!(err instanceof ReviewError)) throw err;
+        json(res, 400, { error: err.message });
+        return true;
+      }
+    }
+    if (route === "review-resolve" && req.method === "POST") {
+      // Claude reports which pins it fixed and in which new video; the app checks that the pins were sent and the video is newer.
+      try {
+        const video = resolveVideo(await listVideos(dir), body.video);
+        const ids = (Array.isArray(body.pins) ? body.pins : [body.pins]).map((p) => Number(String(p).replace(/^ピン|^#/, "")));
+        const review = await markDone(videoDirOf(dir), video.name, ids, body.fixed_in);
+        return ok({ video: video.name, done: ids, still_open: review.pins.filter((pin) => pin.status === "open").map((pin) => pin.id) });
+      } catch (err) {
+        if (!(err instanceof ReviewError)) throw err;
+        json(res, 400, { error: err.message });
+        return true;
+      }
     }
     json(res, 404, { error: "unknown agent route" });
     return true;

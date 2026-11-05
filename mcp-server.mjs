@@ -47,6 +47,16 @@ const TOOLS = [
     inputSchema: { type: "object", properties: { job_id: { type: "string" } }, required: ["job_id"], additionalProperties: false },
   },
   {
+    name: "list_review_pins",
+    description: "The review pins the user put on a video in the app: each has an id, a time in seconds, a position (x, y as 0-1 from the top left, or null for the whole picture), the comment, and whether it is open or done. The user sends pins to you with a message pointing to a <video>.review.md file; use this to read them directly.",
+    inputSchema: { type: "object", properties: { video: { description: "The video: its id (3 or \"#3\") or file name" } }, required: ["video"], additionalProperties: false },
+  },
+  {
+    name: "resolve_review_pins",
+    description: "After you made a FIXED NEW VERSION of a video (never overwrite the old one), report which pins it fixes. The app marks them done. It refuses pins that were not sent to you, and a fixed_in video that does not exist or is older than the moment the pins were sent. Pins you could not fix stay open: tell the user why.",
+    inputSchema: { type: "object", properties: { video: { description: "The ORIGINAL video the pins are on: its id or file name" }, pins: { type: "array", items: { type: "integer" }, description: "Ids of the pins that the new version fixes" }, fixed_in: { type: "string", description: "File name of the new version in Output/video, e.g. cut3-v2.mp4" } }, required: ["video", "pins", "fixed_in"], additionalProperties: false },
+  },
+  {
     name: "list_video_tools",
     description: "The curated list of skills, plugins, MCP servers and tools for making videos (render, music-video, animation, generation, captions, editing, audio), each with what it is for, what it needs, costs, sign-in, the exact install commands, and whether it is installed in THIS project. Only entries in this list may be proposed. Call it when a video task starts, before suggesting any tool. See the rules for how to install.",
     inputSchema: { type: "object", properties: { category: { type: "string", enum: ["render", "music-video", "animation", "generation", "captions", "editing", "audio"], description: "Only entries of this category" } }, additionalProperties: false },
@@ -115,6 +125,8 @@ const HANDLERS = {
   },
   wait_for_job: ({ job_id, timeout_seconds }) => waitForJob(job_id, timeout_seconds),
   cancel_job: ({ job_id }) => api("POST", "cancel", { job_id }),
+  list_review_pins: ({ video }) => api("GET", `review?video=${encodeURIComponent(video)}`),
+  resolve_review_pins: ({ video, pins, fixed_in }) => api("POST", "review-resolve", { video, pins, fixed_in }),
   list_video_tools: ({ category }) => api("GET", category ? `video-tools?category=${encodeURIComponent(category)}` : "video-tools"),
   audio_tools_status: () => api("GET", "audio-tools"),
   setup_audio_tools: async ({ gpu }) => summary({ id: "setup", ...(await api("POST", "audio-setup", { gpu: gpu === true })) }),

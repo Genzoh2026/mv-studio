@@ -20,6 +20,7 @@ import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
 import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listNumberedImages, saveImage } from "./images.mjs";
 import { listNumberedVideos, videoContentType, videoPath } from "./videos.mjs";
 import { listNumbered } from "./library-core.mjs";
+import { ReviewError, deletePins, markSent, readReview, saveUserPins, writeRequest } from "./review.mjs";
 import { deleteItems, emptyTrash, listTrash, restoreItems, trashMediaByName, trashSongsByBase } from "./trash.mjs";
 import { AudioError, MAX_AUDIO_BYTES, saveAudioStream } from "./audio.mjs";
 import { SessionLimitError, createSessions } from "./sessions.mjs";
@@ -39,6 +40,7 @@ const CODE_VERSION = await codeFingerprint(HERE);
 const MAX_DEPTH = 3;
 const MAX_BODY = 4096;
 const MAX_DRAFT_BODY = 100_000;
+const MAX_REVIEW_BODY = 1_000_000; // up to 300 pins of 2,000 characters
 const MAX_TYPED = 600;
 const CLAUDE_MISSING_CLOSE_CODE = 4004; // the page shows the server's guide instead of its generic closed message
 const STARTED_AT = Date.now();
@@ -207,7 +209,7 @@ const catalogInstaller = createCatalogInstaller({
   onFinished: () => pluginCache.clear(), // the next list must show what was just installed
 });
 
-const agentApi = createAgentApi({ auth: agentAuth, existingPjDir, listNumberedSongs, songJobs, installer, audioTools, readBody, json, catalog: videoCatalog, getPlugins });
+const agentApi = createAgentApi({ listVideos: (dir) => listNumberedVideos(videoDir(dir)), videoDirOf: (dir) => videoDir(dir), auth: agentAuth, existingPjDir, listNumberedSongs, songJobs, installer, audioTools, readBody, json, catalog: videoCatalog, getPlugins });
 
 /** Resolve a project name from the client to its folder, or null. The name must be a plain folder name under PJs. */
 function pjDir(name) {
@@ -637,6 +639,32 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req, MAX_DRAFT_BODY);
       if (!(await existingPjDir(body.pj))) return json(res, 400, { error: "bad project" });
       return json(res, 200, await trashProjectVideos(body.pj, body.names));
+    }
+    if (url.pathname.startsWith("/api/videos/review") && ["GET", "POST"].includes(req.method)) {
+      const route = url.pathname.slice("/api/videos/review".length);
+      if (req.method === "POST" && !sameOrigin(req)) return json(res, 403, { error: "bad origin" });
+      const body = req.method === "POST" ? await readBody(req, MAX_REVIEW_BODY) : {};
+      const dir = await existingPjDir(url.searchParams.get("pj") ?? body.pj);
+      const name = url.searchParams.get("name") ?? body.name;
+      if (!dir) return json(res, 400, { error: "bad project" });
+      const videos = await listNumberedVideos(videoDir(dir));
+      const video = videos.find((v) => v.name === name);
+      if (!video) return json(res, 404, { error: "no such video" });
+      try {
+        if (route === "" && req.method === "GET") return json(res, 200, await readReview(videoDir(dir), name));
+        if (route === "" && req.method === "POST") return json(res, 200, await saveUserPins(videoDir(dir), name, body.pins));
+        if (route === "/delete" && req.method === "POST") return json(res, 200, await deletePins(videoDir(dir), name, Array.isArray(body.ids) ? body.ids : []));
+        // The page puts the one-line message into Claude's input, then reports it with /sent.
+        if (route === "/request" && req.method === "POST") {
+          const written = await writeRequest(videoDir(dir), name, video);
+          return json(res, 200, { ...written, line: `動画 #${video.id}(${name})の修正指示を Output/video/${written.file} に書きました。読んで、新しいバージョンとして直してください。` });
+        }
+        if (route === "/sent" && req.method === "POST") return json(res, 200, await markSent(videoDir(dir), name, Array.isArray(body.ids) ? body.ids : []));
+      } catch (err) {
+        if (err instanceof ReviewError) return json(res, 400, { error: err.message });
+        throw err;
+      }
+      return json(res, 404, { error: "unknown review route" });
     }
     if (url.pathname === "/video" && req.method === "GET") return serveVideo(req, res, url);
     if (url.pathname === "/api/server" && req.method === "GET") {
