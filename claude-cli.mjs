@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { tr } from "./messages.mjs";
 
 export const DOCS_URL = "https://code.claude.com/docs/en/setup";
 const VERSION_TIMEOUT_MS = 10_000;
@@ -54,17 +55,17 @@ export function installCommands(platform = process.platform) {
 }
 
 /** Plain-text guide for a terminal (LF line breaks). */
-export function installGuideText(platform = process.platform) {
+export function installGuideText(platform = process.platform, lang = "ja") {
   const commands = installCommands(platform).map((c) => `  ${c.label}:  ${c.command}`).join("\n");
   return [
-    "Claude Code が見つかりません。",
-    `公式の導入手順: ${DOCS_URL}`,
+    tr(lang, "Claude Code が見つかりません。"),
+    tr(lang, "公式の導入手順: {url}", { url: DOCS_URL }),
     "",
     commands,
     "",
-    "導入したら、新しいターミナルで  claude --version  を実行して確認し、",
-    "アプリの ⚙ 設定 →「再確認」を押してください。",
-    "それでも見つからないときは、このアプリを再起動してください(PATH は起動時に読み込まれます)。",
-    "初回は claude を起動し、ブラウザでログインします(Pro / Max / Team / Enterprise / Console のいずれかが必要です)。",
+    tr(lang, "導入したら、新しいターミナルで  claude --version  を実行して確認し、"),
+    tr(lang, "アプリの ⚙ 設定 →「再確認」を押してください。"),
+    tr(lang, "それでも見つからないときは、このアプリを再起動してください(PATH は起動時に読み込まれます)。"),
+    tr(lang, "初回は claude を起動し、ブラウザでログインします(Pro / Max / Team / Enterprise / Console のいずれかが必要です)。"),
   ].join("\n");
 }

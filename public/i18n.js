@@ -3,22 +3,16 @@
 // stays Japanese (npm test makes sure none is missing). Texts with values use {name} holes: t("{n} 件を選択中", { n: 3 }).
 // The language is chosen once per page load: the first time from the browser's language, afterwards from what the user picked
 // (🌐 in the left bar), and switching reloads the page so every screen is drawn again in the new language.
+// Every request the page makes carries the language (x-mv-lang), so the texts the server writes follow it too.
+import { detectLanguage, translate as translateWith } from "./i18n-core.js";
 import { EN } from "./i18n-en.js";
 
 const STORAGE_KEY = "mv-studio:lang";
 export const LANGS = [["ja", "日本語"], ["en", "English"]];
 
-/** The language to use: the saved choice, else the browser's (Japanese for ja*, English otherwise). */
-export function detectLanguage(saved, browserLanguage) {
-  if (saved === "ja" || saved === "en") return saved;
-  return String(browserLanguage ?? "").toLowerCase().startsWith("ja") ? "ja" : "en";
-}
-
-/** The text in `language`; {name} holes are filled from `vars` (a hole without a value stays as it is). */
-export function translate(language, text, vars, dictionary = EN) {
-  const base = language === "en" ? (dictionary[text] ?? text) : text;
-  return vars ? base.replace(/\{(\w+)\}/g, (hole, name) => (name in vars ? String(vars[name]) : hole)) : base;
-}
+export { detectLanguage };
+/** The text in `language` from the screen's English dictionary (or `dictionary`). */
+export const translate = (language, text, vars, dictionary = EN) => translateWith(language, text, vars, dictionary);
 
 const saved = typeof localStorage === "undefined" ? null : localStorage.getItem(STORAGE_KEY);
 export const lang = detectLanguage(saved, typeof navigator === "undefined" ? "" : navigator.language);
@@ -26,6 +20,15 @@ if (typeof document !== "undefined") document.documentElement.lang = lang;
 
 export const locale = lang === "ja" ? "ja-JP" : "en-US";
 export const t = (text, vars) => translate(lang, text, vars);
+
+if (typeof window !== "undefined" && window.fetch) {
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const headers = new Headers(init.headers ?? (input instanceof Request ? input.headers : undefined));
+    if (!headers.has("x-mv-lang")) headers.set("x-mv-lang", lang);
+    return originalFetch(input, { ...init, headers });
+  };
+}
 
 /** Chooses the language and redraws everything by reloading the page. */
 export function setLang(next) {

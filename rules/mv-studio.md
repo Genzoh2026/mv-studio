@@ -22,7 +22,7 @@ songs on the right. The current directory is ONE MV project. These rules are sup
   `{"kind": "still|cut|final", "inputs": [{"type": "song|image|video", "name": "<file name>"}],
   "method": {"tool": "", "model": "", "prompt": "", "params": {"seconds": 5}, "created_at": "<ISO time>"},
   "parent": {"name": "<file it is a new version of>", "comments": ["<ids of the review pins it addresses>"]},
-  "note": "<one or two sentences in Japanese: what you aimed for>"}`
+  "note": "<one or two sentences in the language of the request (Japanese or English): what you aimed for>"}`
   - `kind`: `still` = a generated image, `cut` = a short video clip, `final` = a finished MV.
   - `inputs` lists the exact files you used (names, not ids). `parent` only for a new version of an earlier file.
   - `params` are flat key/value pairs (seconds, seed, resolution, ...). NEVER write API keys or tokens into it.
@@ -94,7 +94,7 @@ songs on the right. The current directory is ONE MV project. These rules are sup
 Each draft has two files in `Drafts/`, each with exactly ONE owner:
 
 - `Drafts/<name>.human.json` is the user's version. Read it. NEVER edit it.
-- `Drafts/<name>.claude.json` is yours. Same fields plus `"note"` (one or two sentences, in Japanese: what you
+- `Drafts/<name>.claude.json` is yours. Same fields plus `"note"` (one or two sentences, in the language of the request (Japanese or English): what you
   changed and why). The app shows the two side by side and lets the user take yours over.
 - Fields: `{"title": "", "style": "", "lyrics": "", "settings": {"vocal_gender": "male|female|", "weirdness": 0-1 or
   null, "style_influence": 0-1 or null, "audio_influence": 0-1 or null, "instrumental": true|false,
@@ -106,6 +106,11 @@ Each draft has two files in `Drafts/`, each with exactly ONE owner:
 ## Requests typed by the app's buttons
 
 The app types one of these requests, each starting with a tag (1-3 and 5 from the draft tab, 4 and 6 from a song card). Follow the matching procedure.
+
+The app has a Japanese and an English screen, and types the request in the screen's language. Every tag therefore exists twice:
+`【確認】` = `[Review]`, `【完成して生成】` = `[Complete and generate]`, `【この案で生成】` = `[Generate with this draft]`,
+`【ダウンロード】` = `[Download]`, `【Voice更新】` = `[Update Voices]`, `【解析】` = `[Analyze]`. Treat the two spellings as the same request. Answer in the
+language the request (or the user) is written in.
 
 1. `【確認】` — review a draft.
    Read `Drafts/<name>.human.json`. If the lyrics are EMPTY (the user gave only a title, style or settings), write an original first draft (a "素案") from them for the user to react to, and say so in the `note`. Otherwise complete the lyrics: keep the user's ideas and wording where they work, give it a
@@ -164,7 +169,7 @@ empty; if they are, ask instead of generating.
    - The responses are long. NEVER paste beats or words into the chat; answer with one line: BPM, key, number of
      sections and beats, number of words, and which part (if any) was unavailable. Do not retry beyond the polling above.
 - **Review pins: fix what the user pinned, as a new version.** In a video's viewer the user drops pins (a time, a place on the
-  picture, a comment) and presses 修正を依頼; you then get a line pointing to `Output/video/<name>.review.md`. Read it (or call
+  picture, a comment) and presses 修正を依頼 (in English: "Ask Claude to fix"); you then get a line pointing to `Output/video/<name>.review.md`. Read it (or call
   `list_review_pins`) and for each pin make the change, writing a NEW video (`<name>-v2.mp4`; never overwrite the original) with a
   `.gen.json` whose `parent` is the original. Positions are fractions of the picture from the top left; a pin without a place is
   about the whole picture at that time. When the new video exists, call `resolve_review_pins` with the pin numbers you fixed and

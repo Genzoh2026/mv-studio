@@ -20,6 +20,7 @@ import { ConflictError, listDrafts, readVoices, saveHuman } from "./drafts.mjs";
 import { ImageError, MAX_IMAGE_BYTES, contentTypeOf, imagePath, listNumberedImages, saveImage } from "./images.mjs";
 import { listNumberedVideos, videoContentType, videoPath } from "./videos.mjs";
 import { listNumbered } from "./library-core.mjs";
+import { langOf, tr } from "./messages.mjs";
 import { ReviewError, deletePins, markSent, readReview, saveUserPins, writeRequest } from "./review.mjs";
 import { deleteItems, emptyTrash, listTrash, restoreItems, trashMediaByName, trashSongsByBase } from "./trash.mjs";
 import { AudioError, MAX_AUDIO_BYTES, saveAudioStream } from "./audio.mjs";
@@ -73,6 +74,7 @@ const STATIC = {
   "/i18n.js": ["public/i18n.js", "text/javascript"],
   "/i18n-en.js": ["public/i18n-en.js", "text/javascript"],
   "/lang.js": ["public/lang.js", "text/javascript"],
+  "/i18n-core.js": ["public/i18n-core.js", "text/javascript"],
   "/video-tools-panel.js": ["public/video-tools-panel.js", "text/javascript"],
   "/power.js": ["public/power.js", "text/javascript"],
   "/toast.js": ["public/toast.js", "text/javascript"],
@@ -669,8 +671,9 @@ const server = createServer(async (req, res) => {
         if (route === "/delete" && req.method === "POST") return json(res, 200, await deletePins(videoDir(dir), name, Array.isArray(body.ids) ? body.ids : []));
         // The page puts the one-line message into Claude's input, then reports it with /sent.
         if (route === "/request" && req.method === "POST") {
-          const written = await writeRequest(videoDir(dir), name, video);
-          return json(res, 200, { ...written, line: `動画 #${video.id}(${name})の修正指示を Output/video/${written.file} に書きました。読んで、新しいバージョンとして直してください。` });
+          const lang = langOf(req);
+          const written = await writeRequest(videoDir(dir), name, video, lang);
+          return json(res, 200, { ...written, line: tr(lang, "動画 #{id}({name})の修正指示を Output/video/{file} に書きました。読んで、新しいバージョンとして直してください。", { id: video.id, name, file: written.file }) });
         }
         if (route === "/sent" && req.method === "POST") return json(res, 200, await markSent(videoDir(dir), name, Array.isArray(body.ids) ? body.ids : []));
       } catch (err) {
@@ -741,10 +744,10 @@ const server = createServer(async (req, res) => {
       await listNumberedSongs(body.pj); // retire the moved songs' ids now, so a song put back later is a new one
       return json(res, 200, { moved: answer.moved, failed: [...skipped, ...answer.failed] });
     }
-    if (url.pathname === "/api/audio-tools" && req.method === "GET") return json(res, 200, await audioTools.status({ refresh: url.searchParams.get("refresh") === "1" }));
+    if (url.pathname === "/api/audio-tools" && req.method === "GET") return json(res, 200, await audioTools.status({ refresh: url.searchParams.get("refresh") === "1", lang: langOf(req) }));
     if (url.pathname === "/api/audio-tools/python" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
-      return json(res, 200, await audioTools.setPython((await readBody(req)).path ?? null));
+      return json(res, 200, await audioTools.setPython((await readBody(req)).path ?? null, langOf(req)));
     }
     if (url.pathname === "/api/video-tools" && req.method === "GET") {
       if (!videoCatalog) return json(res, 200, { available: false, entries: [] });
@@ -772,13 +775,13 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { cancelled: catalogInstaller.cancel() });
     }
     if (url.pathname === "/api/audio-install" && req.method === "GET") return json(res, 200, installer.snapshot());
-    if (url.pathname === "/api/audio-install/plan" && req.method === "GET") return json(res, 200, await installer.preview({ gpu: url.searchParams.get("gpu") === "1" }));
+    if (url.pathname === "/api/audio-install/plan" && req.method === "GET") return json(res, 200, await installer.preview({ gpu: url.searchParams.get("gpu") === "1", lang: langOf(req) }));
     if (url.pathname === "/api/audio-install/start" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
       const body = await readBody(req);
       // The page shows the plan and asks first; the server insists that it did.
       if (body.confirmed !== true) return json(res, 400, { error: "the setup needs the user's confirmation" });
-      return json(res, 200, await installer.start({ gpu: body.gpu === true }));
+      return json(res, 200, await installer.start({ gpu: body.gpu === true, lang: langOf(req) }));
     }
     if (url.pathname === "/api/audio-install/cancel" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
@@ -786,14 +789,14 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === "/api/audio-tools/model" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
-      return json(res, 200, await audioTools.setModel((await readBody(req)).model));
+      return json(res, 200, await audioTools.setModel((await readBody(req)).model, langOf(req)));
     }
     if (url.pathname === "/api/songs/process" && req.method === "POST") {
       if (!sameOrigin(req)) return json(res, 403, { error: "bad origin" });
       const body = await readBody(req);
       const dir = await existingPjDir(body.pj);
       if (!dir) return json(res, 400, { error: "bad project" });
-      const job = await songJobs.enqueue({ pj: body.pj, pjDir: dir, base: body.base, kind: body.kind, then: body.then });
+      const job = await songJobs.enqueue({ pj: body.pj, pjDir: dir, base: body.base, kind: body.kind, then: body.then, lang: langOf(req) });
       return json(res, 200, songJobs.manager.list(body.pj).find((j) => j.id === job.id));
     }
     if (url.pathname === "/api/jobs" && req.method === "GET") return json(res, 200, songJobs.manager.list(url.searchParams.get("pj") || undefined));
@@ -857,7 +860,7 @@ async function connectTerminal(ws, req) {
   if (!sessions.running().includes(name)) {
     if (!claude.found) claude = await detectClaude();
     if (!claude.found) {
-      ws.send(`\r\n${installGuideText().replaceAll("\n", "\r\n")}\r\n`);
+      ws.send(`\r\n${installGuideText(undefined, new URL(req.url, `http://${HOST}`).searchParams.get("lang") === "en" ? "en" : "ja").replaceAll("\n", "\r\n")}\r\n`);
       return ws.close(CLAUDE_MISSING_CLOSE_CODE, "claude not found");
     }
   }

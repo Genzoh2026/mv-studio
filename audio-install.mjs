@@ -4,6 +4,7 @@
 // and every command is built here as an argument list (nothing goes through a shell).
 import { spawn } from "node:child_process";
 import { stat } from "node:fs/promises";
+import { tr } from "./messages.mjs";
 
 export const GPU_TORCH_INDEX = "https://download.pytorch.org/whl/cu126";
 const MAX_LOG_LINES = 300;
@@ -20,21 +21,21 @@ export const displayCommand = (args) => args.map(quote).join(" ");
  *   base: {command: string, pre: string[]}|null, gpu: string|null, wantGpu: boolean}} input
  * @returns {{ok: boolean, reason: string|null, steps: {id: string, label: string, args: string[], display: string}[], gpuStep: boolean}}
  */
-export function planSetup({ venvDir, venvPython, venvExists, venvTorch, venvCuda, base, gpu, wantGpu }) {
+export function planSetup({ venvDir, venvPython, venvExists, venvTorch, venvCuda, base, gpu, wantGpu, lang = "ja" }) {
   const steps = [];
   const add = (id, label, args) => steps.push({ id, label, args, display: displayCommand(args) });
   if (!venvExists) {
-    if (!base) return { ok: false, reason: "Python 3 が見つかりません。先に Python を入れてください(下の手順)。", steps: [], gpuStep: false };
-    add("venv", "専用の環境を作る", [base.command, ...base.pre, "-m", "venv", venvDir]);
+    if (!base) return { ok: false, reason: tr(lang, "Python 3 が見つかりません。先に Python を入れてください(下の手順)。"), steps: [], gpuStep: false };
+    add("venv", tr(lang, "専用の環境を作る"), [base.command, ...base.pre, "-m", "venv", venvDir]);
   }
   const gpuStep = Boolean(wantGpu && gpu && !venvCuda);
   if (gpuStep) {
     // A venv that has no PyTorch yet gets the CUDA build directly; one that already has the CPU build is switched over.
     const swap = venvExists && venvTorch;
-    add("torch-gpu", "GPU 版の PyTorch を入れる", [venvPython, "-m", "pip", "install", ...PIP_FLAGS, ...(swap ? ["--upgrade", "--force-reinstall", "--no-deps"] : []), "torch", "--index-url", GPU_TORCH_INDEX]);
+    add("torch-gpu", tr(lang, "GPU 版の PyTorch を入れる"), [venvPython, "-m", "pip", "install", ...PIP_FLAGS, ...(swap ? ["--upgrade", "--force-reinstall", "--no-deps"] : []), "torch", "--index-url", GPU_TORCH_INDEX]);
   }
   // numpy is named on purpose: Demucs needs it but does not install it on most systems.
-  add("demucs", "Demucs と numpy を入れる", [venvPython, "-m", "pip", "install", ...PIP_FLAGS, "demucs", "numpy"]);
+  add("demucs", tr(lang, "Demucs と numpy を入れる"), [venvPython, "-m", "pip", "install", ...PIP_FLAGS, "demucs", "numpy"]);
   return { ok: true, reason: null, steps, gpuStep };
 }
 
@@ -56,9 +57,9 @@ function longPathsEnabled() {
 }
 
 /** A warning for a workspace path that is too deep for the install to succeed, or null. */
-export async function pathWarning(venvDir, platform = process.platform) {
+export async function pathWarning(venvDir, platform = process.platform, lang = "ja") {
   if (platform !== "win32" || venvDir.length <= LONG_PATH_LIMIT || (await longPathsEnabled())) return null;
-  return `この場所は、パスが長すぎます(${venvDir.length} 文字)。Windows の上限(260 文字)のため、導入が途中で失敗することがあります。MV Studio のフォルダを、もっと短い場所(例: C:\\mvs)に置くか、Windows の「長いパスを有効にする」設定を使ってください。`;
+  return tr(lang, "この場所は、パスが長すぎます({n} 文字)。Windows の上限(260 文字)のため、導入が途中で失敗することがあります。MV Studio のフォルダを、もっと短い場所(例: C:\\mvs)に置くか、Windows の「長いパスを有効にする」設定を使ってください。", { n: venvDir.length });
 }
 
 /** Stops a process and anything it started (pip may start builds). */
@@ -76,7 +77,7 @@ export function createInstaller({ tools, isBusy, spawnStep = runStep }) {
   let state = { state: "idle", steps: [], log: [], error: null, startedAt: null, finishedAt: null, gpu: false };
   let controller = null;
 
-  async function inspect(wantGpu) {
+  async function inspect(wantGpu, lang) {
     const status = await tools.status({ refresh: true });
     const venv = await tools.inspectVenv();
     const venvExists = await exists(tools.venvPython);
@@ -84,7 +85,7 @@ export function createInstaller({ tools, isBusy, spawnStep = runStep }) {
       venvDir: tools.venvDir, venvPython: tools.venvPython, venvExists,
       venvTorch: venv?.torch ?? null, venvCuda: Boolean(venv?.cuda),
       base: status.python.found ? await tools.basePython() : null,
-      gpu: await tools.gpuName(), wantGpu,
+      gpu: await tools.gpuName(), wantGpu, lang,
     });
   }
 
@@ -100,16 +101,16 @@ export function createInstaller({ tools, isBusy, spawnStep = runStep }) {
     running: () => state.state === "running",
 
     /** What a start would do, for the confirmation screen. */
-    async preview({ gpu = false } = {}) {
-      const plan = await inspect(gpu);
+    async preview({ gpu = false, lang = "ja" } = {}) {
+      const plan = await inspect(gpu, lang);
       const gpuName = await tools.gpuName();
-      return { ok: plan.ok, reason: plan.reason, warning: await pathWarning(tools.venvDir), steps: plan.steps.map(({ id, label, display }) => ({ id, label, display })), gpuAvailable: Boolean(gpuName), gpuName, gpuStep: plan.gpuStep, venvDir: tools.venvDir };
+      return { ok: plan.ok, reason: plan.reason, warning: await pathWarning(tools.venvDir, undefined, lang), steps: plan.steps.map(({ id, label, display }) => ({ id, label, display })), gpuAvailable: Boolean(gpuName), gpuName, gpuStep: plan.gpuStep, venvDir: tools.venvDir };
     },
 
-    async start({ gpu = false } = {}) {
+    async start({ gpu = false, lang = "ja" } = {}) {
       if (state.state === "running") throw new Error("a setup is already running");
       if (isBusy()) throw new Error("a separation or analysis is running; wait until it finishes");
-      const plan = await inspect(gpu);
+      const plan = await inspect(gpu, lang);
       if (!plan.ok) throw new Error(plan.reason);
       controller = new AbortController();
       state = { state: "running", steps: plan.steps.map((s) => ({ ...s, state: "waiting" })), log: [], error: null, startedAt: Date.now(), finishedAt: null, gpu: plan.gpuStep };

@@ -6,6 +6,7 @@ import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { withLock } from "./library-core.mjs";
 import { videoPath } from "./videos.mjs";
+import { tr } from "./messages.mjs";
 
 export const REVIEW_EXT = ".review.json";
 export const REVIEW_MD_EXT = ".review.md";
@@ -147,7 +148,7 @@ export function markDone(dir, videoName, ids, fixedIn, now = Date.now()) {
       const pin = review.pins.find((p) => p.id === id);
       if (!pin) throw new ReviewError(`pin ${id} does not exist on ${videoName}`);
       if (pin.status === "done") throw new ReviewError(`pin ${id} is already done`);
-      if (!pin.sentAt) throw new ReviewError(`pin ${id} was not sent to Claude yet; the user sends pins with the 修正を依頼 button`);
+      if (!pin.sentAt) throw new ReviewError(`pin ${id} was not sent to Claude yet; the user sends pins with the "Ask Claude to fix" (修正を依頼) button`);
       if (fixed.mtimeMs < pin.sentAt) throw new ReviewError(`${fixedIn} is older than the moment pin ${id} was sent; write the fixed video first`);
     }
     return { ...review, pins: review.pins.map((pin) => (targets.has(pin.id) ? { ...pin, status: "done", doneAt: now, fixedIn } : pin)) };
@@ -158,27 +159,27 @@ const clock = (seconds) => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed
 const percent = (v) => `${Math.round(v * 100)}%`;
 
 /** The Markdown Claude reads: one line per open pin with the time, the place and the comment. */
-export function requestMarkdown(video, pins) {
+export function requestMarkdown(video, pins, lang = "ja") {
   const open = pins.filter((pin) => pin.status === "open" && pin.text.trim());
   const lines = [
-    `# 動画 #${video.id} ${video.name} の修正指示`,
+    tr(lang, "# 動画 #{id} {name} の修正指示", { id: video.id, name: video.name }),
     "",
-    "- 元の動画は上書きせず、新しいバージョン(例: `-v2`)として出力してください。`.gen.json` の `parent` に元の動画を書いてください。",
-    "- 直したら、MCP ツール `resolve_review_pins` で、直したピン番号と新しい動画のファイル名を報告してください。",
-    "- 位置は画面の左上を 0%・0% とした割合です。位置がないものは、その時刻の動画全体への指示です。",
+    tr(lang, "- 元の動画は上書きせず、新しいバージョン(例: `-v2`)として出力してください。`.gen.json` の `parent` に元の動画を書いてください。"),
+    tr(lang, "- 直したら、MCP ツール `resolve_review_pins` で、直したピン番号と新しい動画のファイル名を報告してください。"),
+    tr(lang, "- 位置は画面の左上を 0%・0% とした割合です。位置がないものは、その時刻の動画全体への指示です。"),
     "",
-    ...open.map((pin) => `- 【修正】ピン${pin.id} ${clock(pin.t)} ${pin.x === null ? "(全体)" : `(x ${percent(pin.x)}, y ${percent(pin.y)})`} ${pin.text.trim().replace(/\s*\n\s*/g, " / ")}`),
+    ...open.map((pin) => tr(lang, "- 【修正】ピン{id} {time} {place} {text}", { id: pin.id, time: clock(pin.t), place: pin.x === null ? tr(lang, "(全体)") : `(x ${percent(pin.x)}, y ${percent(pin.y)})`, text: pin.text.trim().replace(/\s*\n\s*/g, " / ") })),
     "",
   ];
   return lines.join("\n");
 }
 
 /** Writes <name>.review.md for the open, commented pins; returns the pin ids it contains and the Markdown. */
-export async function writeRequest(dir, videoName, video) {
+export async function writeRequest(dir, videoName, video, lang = "ja") {
   const review = await readReview(dir, videoName);
   const pins = review.pins.filter((pin) => pin.status === "open" && pin.text.trim());
   if (!pins.length) throw new ReviewError("there is no open pin with a comment to send");
-  const markdown = requestMarkdown(video, pins);
+  const markdown = requestMarkdown(video, pins, lang);
   await writeFile(reviewMarkdownFile(dir, videoName), markdown);
   return { ids: pins.map((pin) => pin.id), markdown, file: `${stemOf(videoName)}${REVIEW_MD_EXT}` };
 }

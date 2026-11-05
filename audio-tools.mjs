@@ -4,6 +4,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { tr } from "./messages.mjs";
 
 export const MODELS = ["htdemucs", "htdemucs_ft"];
 export const DEFAULT_MODEL = "htdemucs";
@@ -107,24 +108,25 @@ export function createAudioTools({ workspace, toolsDir, env = process.env, platf
       model: settings.model,
       pythonPath: settings.pythonPath,
       ready: { beats: python.found && Boolean(numpy) && ffmpeg.found, separate: python.found && Boolean(demucs) && !demucsError && ffmpeg.found },
-      install: installHelp({ python, numpy, demucs, demucsError, gpu, cuda, ffmpeg, workspace, platform, venvPython }),
+      _inputs: { python, numpy, demucs, demucsError, gpu, cuda, ffmpeg, workspace, platform, venvPython },
       _run: python.found ? { command: python.command, pre: python.pre } : null,
     };
     return cached;
   }
 
   /** The status the page shows (never the internal run command). */
-  const publicStatus = (status) => { const { _run, ...rest } = status; return rest; };
+  // The install steps are worded when asked for, in the language of the page that asks.
+  const publicStatus = (status, lang) => { const { _run, _inputs, ...rest } = status; return { ...rest, install: installHelp({ ..._inputs, lang }) }; };
 
   return {
     /** Detection runs on first use and again on request, because the user may install something while the app runs. */
-    async status({ refresh = false } = {}) {
+    async status({ refresh = false, lang = "ja" } = {}) {
       if (!cached || refresh) await detect();
-      return publicStatus(cached);
+      return publicStatus(cached, lang);
     },
 
     /** Saves the user's choice of Python (or null to go back to automatic) after checking that it runs. */
-    async setPython(path) {
+    async setPython(path, lang = "ja") {
       if (path !== null) {
         if (typeof path !== "string" || !path.trim() || path.includes("\0")) throw new Error("python: a file path is expected");
         const info = await stat(path.trim()).catch(() => null);
@@ -132,7 +134,7 @@ export function createAudioTools({ workspace, toolsDir, env = process.env, platf
         if (!(await probe(asCommand(path.trim())))) throw new Error(`python: ${path} did not run (is it a Python 3?)`);
       }
       await writeSettings({ ...(await readSettings()), pythonPath: path === null ? null : path.trim() });
-      return this.status({ refresh: true });
+      return this.status({ refresh: true, lang });
     },
 
     /** Where the app's own Python environment lives (the only one the setup ever changes). */
@@ -156,10 +158,10 @@ export function createAudioTools({ workspace, toolsDir, env = process.env, platf
       return out?.trim().split(String.fromCharCode(10))[0]?.trim() || null;
     },
 
-    async setModel(model) {
+    async setModel(model, lang = "ja") {
       if (!MODELS.includes(model)) throw new Error(`model: one of ${MODELS.join(", ")}`);
       await writeSettings({ ...(await readSettings()), model });
-      return this.status({ refresh: true });
+      return this.status({ refresh: true, lang });
     },
 
     /**
@@ -203,40 +205,40 @@ export function createAudioTools({ workspace, toolsDir, env = process.env, platf
 const lastLine = (text) => text.trim().split("\n").filter(Boolean).pop()?.slice(0, 300) ?? "";
 
 /** Commands for what is missing, in the order to run them. Shown to the user, never run by the app. */
-export function installHelp({ python, numpy, demucs, demucsError = null, gpu = null, cuda = false, ffmpeg, workspace, platform, venvPython }) {
+export function installHelp({ python, numpy, demucs, demucsError = null, gpu = null, cuda = false, ffmpeg, workspace, platform, venvPython, lang = "ja" }) {
   const steps = [];
   const win = platform === "win32";
   const quote = (p) => (p.includes(" ") ? `"${p}"` : p);
   // The Python that will run Demucs: the one found, or the workspace environment the steps below create.
   const runner = python.found && demucs ? [python.command, ...(python.pre ?? [])].map(quote).join(" ") : `"${venvPython}"`;
   if (!python.found) {
-    steps.push({ kind: "system", label: "Python 3 を入れる", command: win ? "winget install Python.Python.3.12" : platform === "darwin" ? "brew install python" : "sudo apt install python3 python3-venv", note: "入れたら、アプリの「再確認」を押します(PATH は起動時に読み込まれるので、見つからなければアプリを再起動してください)。PyTorch が対応するのは Python 3.9〜3.12 ごろまでです" });
+    steps.push({ kind: "system", label: tr(lang, "Python 3 を入れる"), command: win ? "winget install Python.Python.3.12" : platform === "darwin" ? "brew install python" : "sudo apt install python3 python3-venv", note: tr(lang, "入れたら、アプリの「再確認」を押します(PATH は起動時に読み込まれるので、見つからなければアプリを再起動してください)。PyTorch が対応するのは Python 3.9〜3.12 ごろまでです") });
   }
   if (!ffmpeg.found) {
-    steps.push({ kind: "system", label: "ffmpeg を入れる", command: win ? "winget install Gyan.FFmpeg" : platform === "darwin" ? "brew install ffmpeg" : "sudo apt install ffmpeg" });
+    steps.push({ kind: "system", label: tr(lang, "ffmpeg を入れる"), command: win ? "winget install Gyan.FFmpeg" : platform === "darwin" ? "brew install ffmpeg" : "sudo apt install ffmpeg" });
   }
   if (!demucs) {
     const venv = join(workspace, SETTINGS_DIR, "venv");
     steps.push(
-      { label: "専用の環境を作る(ワークスペースの中。他の Python を汚しません)", command: `${win ? "python" : "python3"} -m venv "${venv}"` },
+      { label: tr(lang, "専用の環境を作る(ワークスペースの中。他の Python を汚しません)"), command: `${win ? "python" : "python3"} -m venv "${venv}"` },
       // numpy is listed on purpose: Demucs needs it but does not install it on most systems.
-      { label: "Demucs を入れる(曲の分離に必要。数 GB のダウンロードがあります)", command: `"${venvPython}" -m pip install demucs numpy` },
+      { label: tr(lang, "Demucs を入れる(曲の分離に必要。数 GB のダウンロードがあります)"), command: `"${venvPython}" -m pip install demucs numpy` },
     );
   } else if (demucsError) {
     // Installed but it does not load: usually one package that Demucs needs and does not install itself.
     const missing = /No module named '([\w]+)/.exec(demucsError)?.[1];
     steps.push(missing
-      ? { label: `Demucs が読み込めません(${missing} がありません)。足りないものを入れる`, command: `${runner} -m pip install ${Object.hasOwn(PIP_NAMES, missing) ? PIP_NAMES[missing] : missing}`, note: demucsError }
-      : { label: "Demucs が読み込めません。入れ直す", command: `${runner} -m pip install --upgrade --force-reinstall demucs numpy`, note: demucsError });
+      ? { label: tr(lang, "Demucs が読み込めません({missing} がありません)。足りないものを入れる", { missing }), command: `${runner} -m pip install ${Object.hasOwn(PIP_NAMES, missing) ? PIP_NAMES[missing] : missing}`, note: demucsError }
+      : { label: tr(lang, "Demucs が読み込めません。入れ直す"), command: `${runner} -m pip install --upgrade --force-reinstall demucs numpy`, note: demucsError });
   } else if (!numpy) {
-    steps.push({ label: "numpy を入れる(ビート解析に必要)", command: `${runner} -m pip install numpy` });
+    steps.push({ label: tr(lang, "numpy を入れる(ビート解析に必要)"), command: `${runner} -m pip install numpy` });
   }
   // The default PyTorch from PyPI is the CPU build on Windows and macOS, so a GPU stays idle until it is swapped.
   if (gpu && !cuda) {
     steps.push({
-      label: `GPU(${gpu})で速くする: GPU 版の PyTorch に入れ替える(約 3 GB。任意)`,
+      label: tr(lang, "GPU({gpu})で速くする: GPU 版の PyTorch に入れ替える(約 3 GB。任意)", { gpu }),
       command: `${runner} -m pip install --upgrade --force-reinstall --no-deps torch --index-url https://download.pytorch.org/whl/cu126`,
-      note: "PyTorch 公式の手順です(https://pytorch.org/get-started/locally/)。入れ替えたら「再確認」で「GPU が使えます」になれば成功です。GPU がなくても分離は動きます(CPU は遅めです)。",
+      note: tr(lang, "PyTorch 公式の手順です(https://pytorch.org/get-started/locally/)。入れ替えたら「再確認」で「GPU が使えます」になれば成功です。GPU がなくても分離は動きます(CPU は遅めです)。"),
     });
   }
   return steps;

@@ -4,6 +4,7 @@ import { readdir, rename, rm, stat } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, join, resolve, sep } from "node:path";
 import { createJobs } from "./jobs.mjs";
+import { tr } from "./messages.mjs";
 
 export const STEM_NAMES = ["vocals", "drums", "bass", "other"];
 export const STEM_LABELS = { vocals: "声", drums: "ドラム", bass: "ベース", other: "その他" };
@@ -49,16 +50,16 @@ export function createSongJobs({ tools, blocked = () => false }) {
   const manager = createJobs({ run: (job, ctx) => runJob(job, ctx) });
 
   /** A Python "No module named X" is not something the user can act on; say what to do. */
-  const explain = (err) => {
+  const explain = (err, lang = "ja") => {
     const missing = /No module named '([\w.]+)'/.exec(err.message)?.[1];
-    return missing ? new Error(`Python に ${missing} が入っていません。左端の ⚙ 設定 > 音声ツール の手順で入れて、「再確認」を押してください。`) : err;
+    return missing ? new Error(tr(lang, "Python に {missing} が入っていません。左端の ⚙ 設定 > 音声ツール の手順で入れて、「再確認」を押してください。", { missing })) : err;
   };
 
   async function runJob(job, ctx) {
     try {
       await runJobUnchecked(job, ctx);
     } catch (err) {
-      throw explain(err);
+      throw explain(err, job.lang);
     }
   }
 
@@ -76,7 +77,7 @@ export function createSongJobs({ tools, blocked = () => false }) {
         await rm(tmp, { recursive: true, force: true });
       }
       // "Separate, then analyse": the analysis queues itself behind this job and picks up the new drums stem.
-      if (job.then === "beats") manager.enqueue({ pj: job.pj, base: job.base, kind: "beats", requestedBy: job.requestedBy, paths: job.paths, model: job.model, device: job.device, title: job.title });
+      if (job.then === "beats") manager.enqueue({ pj: job.pj, base: job.base, kind: "beats", requestedBy: job.requestedBy, paths: job.paths, model: job.model, device: job.device, title: job.title, lang: job.lang });
       return;
     }
     const target = stemBase + BEATS_EXT;
@@ -95,10 +96,10 @@ export function createSongJobs({ tools, blocked = () => false }) {
     manager,
 
     /** Queues a job after checking the song and the tools. Throws SongJobError with a message the page can show. */
-    async enqueue({ pj, pjDir, base, kind, then, requestedBy = "user" }) {
+    async enqueue({ pj, pjDir, base, kind, then, requestedBy = "user", lang = "ja" }) {
       if (then !== undefined && then !== null && !(kind === "separate" && then === "beats")) throw new SongJobError("then: only \"beats\" can follow \"separate\"");
       if (!KINDS.includes(kind)) throw new SongJobError(`kind: one of ${KINDS.join(", ")}`);
-      if (blocked()) throw new SongJobError("音声ツールの導入中です。終わってからやり直してください");
+      if (blocked()) throw new SongJobError(tr(lang, "音声ツールの導入中です。終わってからやり直してください"));
       const paths = await findSongAudio(pjDir, base);
       if (!paths) throw new SongJobError("this song has no audio file yet (download or add it first)");
       const status = await tools.status();
@@ -108,7 +109,7 @@ export function createSongJobs({ tools, blocked = () => false }) {
       if (kind === "separate" && (await exists(paths.stemBase + STEMS_EXT))) throw new SongJobError("stems already exist for this song");
       // The follow-up needs the analysis tools too; checking now avoids a separation that cannot be followed.
       if (then === "beats" && !status.ready.beats) throw new SongJobError("Python with numpy and ffmpeg are not set up (see Settings > Audio tools)");
-      return manager.enqueue({ pj, base, kind, then: then ?? null, requestedBy, paths, model: status.model, device: status.cuda ? "cuda" : "cpu", title: basename(base) });
+      return manager.enqueue({ pj, base, kind, then: then ?? null, requestedBy, paths, model: status.model, device: status.cuda ? "cuda" : "cpu", title: basename(base), lang });
     },
   };
 }

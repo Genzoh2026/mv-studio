@@ -9,7 +9,7 @@ import { settingsTool } from "/settings.js";
 import { libraryTool } from "/library.js";
 import { trashTool } from "/trash.js";
 import { powerTool } from "/power.js";
-import { locale, t, translateStatic } from "/i18n.js";
+import { lang, locale, t, translateStatic } from "/i18n.js";
 import { langTool } from "/lang.js";
 
 const $ = (id) => document.getElementById(id);
@@ -39,7 +39,7 @@ addEventListener("resize", () => fit.fit());
 function connect(pj) {
   ws?.close(); // detaches only; the session keeps running on the server
   term.reset();
-  const socket = new WebSocket(`ws://${location.host}/term?pj=${encodeURIComponent(pj)}`);
+  const socket = new WebSocket(`ws://${location.host}/term?pj=${encodeURIComponent(pj)}&lang=${lang}`);
   ws = socket;
   socket.onopen = () => {
     fit.fit();

@@ -76,7 +76,7 @@ export function createAgentApi({ listVideos = async () => [], videoDirOf = (dir)
         return true;
       }
       const category = url.searchParams.get("category") || undefined;
-      return ok(await describeCatalog(catalog, { pjDir: dir, plugins: await getPlugins(dir), category }));
+      return ok(await describeCatalog(catalog, { pjDir: dir, plugins: await getPlugins(dir), category, english: false }));
     }
     if (route === "audio-tools" && req.method === "GET") return ok(await audioTools.status({ refresh: url.searchParams.get("refresh") === "1" }));
     if (route === "process" && req.method === "POST") {
@@ -113,7 +113,7 @@ export function createAgentApi({ listVideos = async () => [], videoDirOf = (dir)
       // Claude reports which pins it fixed and in which new video; the app checks that the pins were sent and the video is newer.
       try {
         const video = resolveVideo(await listVideos(dir), body.video);
-        const ids = (Array.isArray(body.pins) ? body.pins : [body.pins]).map((p) => Number(String(p).replace(/^ピン|^#/, "")));
+        const ids = (Array.isArray(body.pins) ? body.pins : [body.pins]).map((p) => Number(String(p).replace(/^(ピン|pin)\s*|^#/i, "")));
         const review = await markDone(videoDirOf(dir), video.name, ids, body.fixed_in);
         return ok({ video: video.name, done: ids, still_open: review.pins.filter((pin) => pin.status === "open").map((pin) => pin.id) });
       } catch (err) {

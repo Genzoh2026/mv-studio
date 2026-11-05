@@ -461,4 +461,8 @@ export const EN = {
   "PJ を絞り込み": "Filter projects",
   "新規 MV 名(日付は自動)": "New MV name (date is added automatically)",
   "ツールバーを開く": "Open the tool bar",
+  "声": "Vocals",
+  "ドラム": "Drums",
+  "ベース": "Bass",
+  "その他": "Other",
 };

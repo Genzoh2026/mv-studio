@@ -8,6 +8,8 @@ const KIND_LABELS = { separate: t("分離"), beats: t("ビート解析") };
 // A job can finish in under a second; its result line stays this long so it is not missed.
 const RECENT_DONE_MS = 8000;
 const justFinished = (job) => job.state === "done" && Boolean(job.finishedAt) && Date.now() - job.finishedAt < RECENT_DONE_MS;
+// The server names the stems in Japanese (声, ドラム, ...); the screen shows them in its own language.
+const stemLabel = (label) => ({ "声": t("声"), "ドラム": t("ドラム"), "ベース": t("ベース"), "その他": t("その他") })[label] ?? label;
 const tookText = (job) => (job.startedAt && job.finishedAt ? t("({s} 秒)", { s: ((job.finishedAt - job.startedAt) / 1000).toFixed(1) }) : "");
 // The settings tool is the first button of the left rail; opening it shows the one-button setup.
 // It opens the panel if needed and brings the audio tools section (with the setup button) into view.
@@ -153,10 +155,10 @@ export function createSongTools({ getProject }) {
   /** The four stems as children of the song card. Null when the song has none. */
   function stemsPanel(song) {
     if (!song.stems?.length) return null;
-    const box = h("details", { className: "stems" }, h("summary", { textContent: t("ステム({names})", { names: song.stems.map((s) => s.label).join(t("・")) }) }));
+    const box = h("details", { className: "stems" }, h("summary", { textContent: t("ステム({names})", { names: song.stems.map((s) => stemLabel(s.label)).join(t("・")) }) }));
     for (const stem of song.stems) {
       const audio = h("audio", { controls: true, preload: "none", src: `/file?pj=${encodeURIComponent(getProject())}&p=${encodeURIComponent(stem.path)}` });
-      box.append(h("div", { className: "stem" }, h("span", { className: "stem-label", textContent: stem.label }), audio));
+      box.append(h("div", { className: "stem" }, h("span", { className: "stem-label", textContent: stemLabel(stem.label) }), audio));
     }
     return box;
   }
