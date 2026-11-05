@@ -2,6 +2,7 @@
 // with its provenance, trash some, and (images only) add files by drag and drop. The folder is the source of truth;
 // this tab lists it, re-rendering only when it changes, and adds or trashes files.
 import { toast } from "/toast.js";
+import { createReviewPanel } from "/review.js";
 import { attachDropZone, uploadFiles } from "/upload.js";
 
 const VIEWS = [["large", "大"], ["medium", "中"], ["small", "小"], ["list", "リスト"]];
@@ -40,7 +41,7 @@ const formatDate = (ms) => new Date(ms).toLocaleString("ja-JP", { dateStyle: "sh
  *   openOther: (kind: "image"|"video", name: string) => void}} options
  *   `openOther` shows a file of the other library (used by the links in the provenance panel).
  */
-export function createMediaLibrary({ root, getProject, kind, openOther }) {
+export function createMediaLibrary({ root, getProject, kind, openOther, typeToTerminal = async () => { throw new Error("terminal not available"); }, isClaudeReady = () => true }) {
   const cfg = KINDS[kind];
   const viewKey = `mv-studio:${kind}-view`;
   let items = [];
@@ -57,6 +58,7 @@ export function createMediaLibrary({ root, getProject, kind, openOther }) {
   let wantOpen = null;      // a file another library asked to show, opened once the list has loaded
   let uploading = 0;
   let detailToken = 0;      // drops the answer of an outdated provenance lookup
+  let reviewPanel = null;   // the pin panel of the opened video
   let openedSnapshot = "";  // the opened file as drawn, so a list change elsewhere does not restart a playing video
 
   const filterInput = h("input", { placeholder: `ファイル名・番号(#3)で絞り込み`, autocomplete: "off", type: "search" });
@@ -196,6 +198,8 @@ export function createMediaLibrary({ root, getProject, kind, openOther }) {
   }
 
   function close() {
+    reviewPanel?.destroy();
+    reviewPanel = null;
     opened = null;
     detailToken++;
     viewer.hidden = true;
@@ -260,12 +264,16 @@ export function createMediaLibrary({ root, getProject, kind, openOther }) {
   function renderViewer() {
     const list = shown();
     const item = list.find((other) => other.name === opened);
+    reviewPanel?.destroy();
+    reviewPanel = null;
     if (!item) return close();
     const info = h("span", { className: "meta", textContent: `${formatSize(item.size)} · ${formatDate(item.mtime)}` });
     let media;
     if (kind === "video") {
-      media = h("video", { src: src(item), controls: true, playsInline: true });
-      media.addEventListener("loadedmetadata", () => { info.textContent = `${media.videoWidth}×${media.videoHeight} · ${media.duration.toFixed(1)}秒 · ${formatSize(item.size)} · ${formatDate(item.mtime)}`; });
+      const player = h("video", { src: src(item), controls: true, playsInline: true });
+      player.addEventListener("loadedmetadata", () => { info.textContent = `${player.videoWidth}×${player.videoHeight} · ${player.duration.toFixed(1)}秒 · ${formatSize(item.size)} · ${formatDate(item.mtime)}`; });
+      reviewPanel = createReviewPanel({ project, name: item.name, video: player, typeToTerminal, isClaudeReady });
+      media = h("div", { className: "rv-stage" }, player, reviewPanel.overlay);
     } else {
       media = h("img", { src: src(item), alt: item.name });
       media.addEventListener("load", () => { info.textContent = `${media.naturalWidth}×${media.naturalHeight} · ${formatSize(item.size)} · ${formatDate(item.mtime)}`; });
@@ -277,17 +285,27 @@ export function createMediaLibrary({ root, getProject, kind, openOther }) {
     // The links need the other library's list too; fill them in as soon as it arrives.
     loadBoth().then((all) => { if (token === detailToken && opened === item.name) aside.replaceChildren(...detailPanel(item, all)); });
     viewer.hidden = false;
-    viewer.replaceChildren(
-      h("header", {}, h("span", { className: "img-id inline", textContent: `#${item.id}` }), h("strong", { textContent: item.name }), info,
-        h("span", { className: "spacer" }),
-        h("button", { type: "button", textContent: "ごみ箱へ", onclick: async () => { close(); await trash([item.name]); } }),
-        h("button", { type: "button", textContent: "✕", title: "閉じる(Esc)", onclick: close })),
+    const stepButtons = [
+      h("button", { type: "button", textContent: "‹", title: "前へ(←)", disabled: !many, onclick: () => step(-1) }),
+      h("button", { type: "button", textContent: "›", title: "次へ(→)", disabled: !many, onclick: () => step(1) }),
+    ];
+    const header = h("header", {}, h("span", { className: "img-id inline", textContent: `#${item.id}` }), h("strong", { textContent: item.name }), info,
+      h("span", { className: "spacer" }),
+      ...(reviewPanel ? stepButtons : []),
+      h("button", { type: "button", textContent: "ごみ箱へ", onclick: async () => { close(); await trash([item.name]); } }),
+      h("button", { type: "button", textContent: "✕", title: "閉じる(Esc)", onclick: close }));
+    if (reviewPanel) {
+      // A video gets the whole width: the picture with its pins, the pin list under it, and the provenance folded away below.
+      aside.classList.add("folded");
+      viewer.replaceChildren(header, h("div", { className: "img-stage single" }, media), reviewPanel.dock, h("details", { className: "rv-origin" }, h("summary", { textContent: "出所・生成情報" }), aside));
+      return;
+    }
+    viewer.replaceChildren(header,
       h("div", { className: "img-stage" },
         h("button", { type: "button", className: "nav", textContent: "‹", title: "前へ(←)", disabled: !many, onclick: () => step(-1) }),
         media,
         h("button", { type: "button", className: "nav", textContent: "›", title: "次へ(→)", disabled: !many, onclick: () => step(1) }),
-        aside),
-    );
+        aside));
   }
 
   viewer.addEventListener("click", (event) => { if (event.target === viewer) close(); });

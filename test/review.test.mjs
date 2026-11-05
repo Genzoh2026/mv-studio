@@ -110,3 +110,12 @@ test("resolveVideo accepts an id, #id or a file name", () => {
   assert.throws(() => resolveVideo(videos, "9"), /no video #9/);
   assert.throws(() => resolveVideo(videos, "nope.mp4"), /no video named/);
 });
+
+test("a new pin keeps the number the page counted for it, but never one that is already taken", async () => {
+  await scratch(async (dir) => {
+    let review = await saveUserPins(dir, "cut.mp4", [{ id: 1, t: 1, text: "a" }]);
+    review = await saveUserPins(dir, "cut.mp4", [...review.pins, { id: 3, t: 2, text: "b" }, { id: 1, t: 9, text: "collides" }]);
+    assert.deepEqual(review.pins.map((p) => p.id).sort(), [1, 3, 4], "3 is kept (the page skipped 2); the colliding new pin gets the next free number");
+    assert.equal(review.next, 5);
+  });
+});

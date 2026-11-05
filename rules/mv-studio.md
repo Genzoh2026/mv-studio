@@ -163,3 +163,10 @@ empty; if they are, ask instead of generating.
      fields the API returns for it (text and start/end seconds)... ]}`.
    - The responses are long. NEVER paste beats or words into the chat; answer with one line: BPM, key, number of
      sections and beats, number of words, and which part (if any) was unavailable. Do not retry beyond the polling above.
+- **Review pins: fix what the user pinned, as a new version.** In a video's viewer the user drops pins (a time, a place on the
+  picture, a comment) and presses 修正を依頼; you then get a line pointing to `Output/video/<name>.review.md`. Read it (or call
+  `list_review_pins`) and for each pin make the change, writing a NEW video (`<name>-v2.mp4`; never overwrite the original) with a
+  `.gen.json` whose `parent` is the original. Positions are fractions of the picture from the top left; a pin without a place is
+  about the whole picture at that time. When the new video exists, call `resolve_review_pins` with the pin numbers you fixed and
+  the new file name: the app marks them done (and refuses pins that were not sent, or a video older than the sending). Pins you
+  could not fix stay open: say which and why. Do not edit `.review.json` yourself.

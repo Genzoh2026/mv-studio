@@ -613,7 +613,7 @@ const draftsTab = createDraftsTab({ root: $("drafts"), getProject: () => viewing
 // A link in one library's provenance panel can point into the other one.
 const libraries = {
   image: createMediaLibrary({ root: $("images"), getProject: () => viewing, kind: "image", openOther: (kind, name) => showLibraryFile(kind, name) }),
-  video: createMediaLibrary({ root: $("videos"), getProject: () => viewing, kind: "video", openOther: (kind, name) => showLibraryFile(kind, name) }),
+  video: createMediaLibrary({ root: $("videos"), getProject: () => viewing, kind: "video", openOther: (kind, name) => showLibraryFile(kind, name), typeToTerminal, isClaudeReady: () => claudeReady }),
 };
 const tabOfKind = { image: "images", video: "videos" };
 function showLibraryFile(kind, name) {

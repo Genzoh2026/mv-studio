@@ -95,17 +95,21 @@ export async function saveUserPins(dir, videoName, incoming) {
     const byId = new Map(review.pins.map((pin) => [pin.id, pin]));
     let next = review.next;
     const pins = [];
+    const used = new Set(); // a number appearing twice in the list counts once; the second one is a new pin
     for (const raw of incoming) {
-      const existing = Number.isInteger(raw?.id) ? byId.get(raw.id) : null;
-      if (existing?.status === "done") { pins.push(existing); continue; } // a finished pin is history
-      const edited = cleanPin({ ...raw, id: existing?.id ?? next, status: "open" });
+      const existing = Number.isInteger(raw?.id) && !used.has(raw.id) ? byId.get(raw.id) : null;
+      if (existing?.status === "done") { used.add(existing.id); pins.push(existing); continue; } // a finished pin is history
+      // A new pin may bring the id the page counted for it (never below the next free one), so the page knows its numbers at once.
+      const wanted = existing ? existing.id : Number.isInteger(raw?.id) && raw.id >= next && raw.id < next + MAX_PINS && !used.has(raw.id) ? raw.id : next;
+      used.add(wanted);
+      const edited = cleanPin({ ...raw, id: wanted, status: "open" });
       if (!edited) throw new ReviewError("a pin needs a time (seconds, 0 or more)");
       if (existing) {
         // Changed text or place must be sent again.
         const same = existing.text === edited.text && existing.t === edited.t && existing.x === edited.x && existing.y === edited.y;
         pins.push({ ...edited, createdAt: existing.createdAt, sentAt: same ? existing.sentAt : null });
       } else {
-        next += 1;
+        next = wanted + 1;
         pins.push({ ...edited, createdAt: Date.now(), sentAt: null });
       }
     }

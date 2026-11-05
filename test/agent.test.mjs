@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createAgentApi, resolveSong } from "../agent-api.mjs";
 import { createAgentAuth } from "../agent-auth.mjs";
 import { validateCatalog } from "../catalog.mjs";
@@ -52,7 +55,7 @@ async function fakeApp(opts = {}) {
   };
   const installer = { snapshot: () => ({ state: "idle", steps: [], log: [], error: null }), cancel: () => true, start: async ({ gpu }) => { calls.setup.push({ gpu }); return { state: "running", steps: [{ state: "running", label: "make env" }], log: ["> python -m venv"], error: null }; } };
   const api = createAgentApi({
-    auth,
+    auth, listVideos: opts.listVideos, videoDirOf: opts.videoDirOf,
     existingPjDir: async (pj) => (pj === "p1" || pj === "p2" ? `/work/${pj}` : null),
     listNumberedSongs: async () => songs,
     songJobs, installer, audioTools: { status: async () => ({ ready: { separate: true, beats: true } }) },
@@ -211,4 +214,28 @@ test("MCP: without a loadable catalog the tool says so instead of returning an e
     assert.equal(answer.isError, true);
     assert.match(answer.text, /catalog could not be loaded/);
   } finally { client.close(); await app.close(); }
+});
+
+test("MCP: Claude reads the review pins and reports fixes; unsent pins and stale videos are refused", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "mvs-mcp-review-"));
+  await writeFile(join(dir, "cut.mp4"), "v1");
+  const { saveUserPins, markSent } = await import("../review.mjs");
+  const app = await fakeApp({ listVideos: async () => [{ id: 7, name: "cut.mp4" }], videoDirOf: () => dir });
+  const client = mcpClient(envFor(app));
+  try {
+    await saveUserPins(dir, "cut.mp4", [{ t: 4, x: 0.5, y: 0.5, text: "暗くする" }]);
+    const listed = await client.tool("list_review_pins", { video: "#7" });
+    assert.deepEqual(listed.data.pins.map((p) => [p.id, p.text, p.status]), [[1, "暗くする", "open"]]);
+    assert.match((await client.tool("resolve_review_pins", { video: 7, pins: [1], fixed_in: "cut-v2.mp4" })).text, /does not exist/);
+    await writeFile(join(dir, "cut-v2.mp4"), "v2");
+    assert.match((await client.tool("resolve_review_pins", { video: 7, pins: [1], fixed_in: "cut-v2.mp4" })).text, /not sent/);
+    await markSent(dir, "cut.mp4", [1], Date.now() - 1000);
+    const done = await client.tool("resolve_review_pins", { video: "cut.mp4", pins: [1], fixed_in: "cut-v2.mp4" });
+    assert.deepEqual(done.data, { video: "cut.mp4", done: [1], still_open: [] });
+    assert.match((await client.tool("list_review_pins", { video: 99 })).text, /no video #99/);
+  } finally {
+    client.close();
+    await app.close();
+    await rm(dir, { recursive: true, force: true });
+  }
 });

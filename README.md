@@ -95,6 +95,12 @@ npm start -- [workspace] [port] # same launcher; default port 4200, workspace ..
 
 Song cards can **split a song into vocals / drums / bass / other** (Demucs) and **find kick / snare / hat times and a tempo estimate**, for Suno songs and for songs you drop in. Everything runs with the Python on your computer and nothing is uploaded; nothing is bundled, and you need none of it unless you use these buttons. Settings > Audio tools has a one-button setup that creates an environment inside the workspace (`.mv-studio/venv`) and installs Demucs and numpy there (shown and confirmed first, with a log and cancel; no other Python is touched; about 0.7 GB, plus about 3 GB if you choose the GPU build of PyTorch). Python 3 and ffmpeg are system-wide, so for those it only shows the commands. The beat analysis needs only numpy and ffmpeg. Results are files beside the song (`<song>.stems/`, `<song>.beats.json`) that Claude can read but not write. The tempo is an estimate (double / half errors are common); trust the hit times.
 
+## 動画へのピン(修正指示) / Review pins on videos
+
+動画ライブラリで動画を開くと、動画の上に「ピン」を打てます。「ピンを打つ」をオンにして直したい場所をクリックすると、その時刻と位置にピンが付きます。コメントを書いて「Claudeに修正を依頼」を押すと、Claude の入力欄に指示が入ります(Enter で送信)。ピンは動画の隣の `<名前>.review.json` に保存され、指示は `<名前>.review.md` に書かれます。Claude は修正を新しいバージョン(`-v2`)として出力し、直したピンを MCP ツール `resolve_review_pins` で報告します。アプリは「送信済みで、送信より新しい動画がある」ピンだけを「修正済み」にします。
+
+Open a video in the video library, turn on "ピンを打つ" and click the picture to pin a time and place with a comment. "Claudeに修正を依頼" puts the request into Claude's input and writes `<name>.review.md`. Claude fixes it as a new version and reports with `resolve_review_pins`; only pins that were sent, with a newer video written afterwards, become done.
+
 ## セキュリティ / Security
 
 - `127.0.0.1` のみで待ち受けます。WebSocket とファイルを変更する API は、同一オリジンのみ受け付けます。

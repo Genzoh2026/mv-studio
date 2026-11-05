@@ -69,6 +69,7 @@ const STATIC = {
   "/audio-tools-panel.js": ["public/audio-tools-panel.js", "text/javascript"],
   "/job-bar.js": ["public/job-bar.js", "text/javascript"],
   "/library.js": ["public/library.js", "text/javascript"],
+  "/review.js": ["public/review.js", "text/javascript"],
   "/video-tools-panel.js": ["public/video-tools-panel.js", "text/javascript"],
   "/power.js": ["public/power.js", "text/javascript"],
   "/toast.js": ["public/toast.js", "text/javascript"],
