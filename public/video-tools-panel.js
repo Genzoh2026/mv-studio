@@ -3,7 +3,7 @@
 // runs on the server (only the catalog's own checked commands), streams its log here and can be cancelled.
 // The list is one line per entry (name, state, a small button); the explanation opens only when a row is clicked.
 import { toast } from "/toast.js";
-import { t } from "/i18n.js";
+import { lang, t } from "/i18n.js";
 
 const POLL_MS = 1000;
 const SHOWN_LOG_LINES = 8;
@@ -136,7 +136,10 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     }, POLL_MS);
   }
 
-  const entryName = (id) => (id ? shortName(catalog?.entries.find((e) => e.id === id)?.name ?? id) : t("{n} 個のツール", { n: install?.count ?? 0 }));
+  /** An entry's text in the screen's language (the English texts come with the entry as `en`; Japanese is the fallback). */
+  const say = (entry, key, japanese) => (lang === "en" ? entry.en?.[key] : undefined) ?? japanese;
+  const nameOf = (entry) => shortName(say(entry, "name", entry.name));
+  const entryName = (id) => (id ? shortName((() => { const found = catalog?.entries.find((e) => e.id === id); return found ? say(found, "name", found.name) : id; })()) : t("{n} 個のツール", { n: install?.count ?? 0 }));
 
   function announce() {
     if (install.state === "done") toast(t("{name} を導入しました", { name: entryName(install.entryId) }), { key: "video-tools" });
@@ -173,12 +176,15 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
   }
 
   function details(entry) {
-    const parts = [h("p", { textContent: entry.summary_ja }), h("p", { className: "sec-note", textContent: entry.use_when_ja })];
-    if (entry.requires?.length) parts.push(h("p", { className: "sec-note", textContent: t("必要なもの") }), list(entry.requires));
-    if (entry.notes_ja?.length) parts.push(h("p", { className: "sec-note", textContent: t("注意") }), list(entry.notes_ja));
-    parts.push(h("p", { className: "sec-note" }, t("ライセンス {license} · 確認日 {date} · ", { license: entry.license, date: entry.verified }), h("a", { href: entry.source, target: "_blank", rel: "noopener noreferrer", textContent: t("配布元 ↗") })));
-    if (entry.manual_steps_ja) {
-      parts.push(h("p", { className: "sec-note", textContent: t("手順(自分で行います)") }), ...entry.manual_steps_ja.map((step) => {
+    const parts = [h("p", { textContent: say(entry, "summary", entry.summary_ja) }), h("p", { className: "sec-note", textContent: say(entry, "use_when", entry.use_when_ja) })];
+    const requires = say(entry, "requires", entry.requires);
+    const notes = say(entry, "notes", entry.notes_ja);
+    if (requires?.length) parts.push(h("p", { className: "sec-note", textContent: t("必要なもの") }), list(requires));
+    if (notes?.length) parts.push(h("p", { className: "sec-note", textContent: t("注意") }), list(notes));
+    parts.push(h("p", { className: "sec-note" }, t("ライセンス {license} · 確認日 {date} · ", { license: say(entry, "license", entry.license), date: entry.verified }), h("a", { href: entry.source, target: "_blank", rel: "noopener noreferrer", textContent: t("配布元 ↗") })));
+    const manualSteps = say(entry, "manual_steps", entry.manual_steps_ja);
+    if (manualSteps) {
+      parts.push(h("p", { className: "sec-note", textContent: t("手順(自分で行います)") }), ...manualSteps.map((step) => {
         const command = /(winget|brew|sudo) /.test(step) ? step.replace(/^[A-Za-z ]+: /, "") : null;
         return command ? h("div", { className: "cmd" }, h("pre", { textContent: command }), copyButton(command)) : h("p", { className: "sec-note", textContent: step });
       }));
@@ -203,7 +209,7 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     const canInstall = COMMAND_KINDS.has(entry.kind) && state !== "installed";
     const stateText = h("span", { className: `vt-state ${state}`, textContent: STATE_LABELS[state] ?? state, title: entry.installed.detail ?? "" });
     const toggle = h("button", { type: "button", className: "vt-toggle", onclick: () => { if (expanded) open.delete(entry.id); else open.add(entry.id); render(true); } },
-      h("span", { className: "vt-name", textContent: shortName(entry.name), title: entry.name }),
+      h("span", { className: "vt-name", textContent: nameOf(entry), title: say(entry, "name", entry.name) }),
       h("span", { className: "vt-meta", textContent: metaLine(entry) }));
     return h("div", { className: `vt-row${expanded ? " open" : ""}` },
       h("div", { className: "vt-line" },
@@ -219,16 +225,16 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     const radio = (value, label) => h("label", {}, Object.assign(h("input", { type: "radio", name: "vt-scope" }), { checked: scope === value, onchange: () => openConfirm(entry.id, value) }), ` ${label}`);
     const cost = COST_LABELS[entry.costs];
     return h("div", { className: "vt-confirm" },
-      h("h4", { textContent: t("{name} を導入しますか?", { name: shortName(entry.name) }) }),
-      h("p", { className: "sec-note", textContent: t("{meta} · ライセンス {license}", { meta: metaLine(entry), license: entry.license }) }),
+      h("h4", { textContent: t("{name} を導入しますか?", { name: nameOf(entry) }) }),
+      h("p", { className: "sec-note", textContent: t("{meta} · ライセンス {license}", { meta: metaLine(entry), license: say(entry, "license", entry.license) }) }),
       h("div", { className: "vt-scope" },
         radio("workspace", t("このワークスペースのすべてのプロジェクト(今ある {n} 個と、これから作る新しいプロジェクト)", { n: projects.length })),
         radio("project", t("このプロジェクトだけ({pj})", { pj: pj || t("未選択") })),
         radio("user", t("自分の Claude 全体(MV 以外の作業にも入ります)"))),
       ...(scope === "workspace" && plan?.ok ? [h("p", { className: "sec-note", textContent: t("入れる先: {targets}。新しく作るプロジェクトにも自動で入ります(あとで各ツールの詳細から切り替えられます)。", { targets: plan.targets.length ? plan.targets.join(t("、")) : t("(まだプロジェクトはありません)") }) })] : []),
-      ...(entry.requires?.length ? [h("p", { className: "sec-note", textContent: t("必要なもの(入っていないと動きません)") }), list(entry.requires)] : []),
+      ...(say(entry, "requires", entry.requires)?.length ? [h("p", { className: "sec-note", textContent: t("必要なもの(入っていないと動きません)") }), list(say(entry, "requires", entry.requires))] : []),
       ...(cost || entry.signin ? [h("p", { className: "bad", textContent: [cost, entry.signin ? t("初回にサインインします(あなたが行います)") : null].filter(Boolean).join("。") })] : []),
-      ...(entry.notes_ja?.length ? [h("p", { className: "sec-note", textContent: t("注意") }), list(entry.notes_ja)] : []),
+      ...(say(entry, "notes", entry.notes_ja)?.length ? [h("p", { className: "sec-note", textContent: t("注意") }), list(say(entry, "notes", entry.notes_ja))] : []),
       !plan ? h("p", { className: "sec-note", textContent: t("確認中…") })
         : !plan.ok ? h("p", { className: "bad", textContent: plan.reason })
           : h("div", {}, h("p", { className: "sec-note", textContent: t("実行するコマンド(この内容だけです)") }), ...plan.steps.flatMap((step) => [h("pre", { className: "setup-cmd", textContent: step.display }), h("p", { className: "sec-note", textContent: t("場所: {cwd}", { cwd: step.cwd }) })])),
@@ -272,7 +278,7 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     const rows = bulkCandidates().map((entry) => {
       const warn = [COST_LABELS[entry.costs], entry.signin ? t("サインインあり") : null].filter(Boolean).join(t("・"));
       const box = Object.assign(h("input", { type: "checkbox" }), { checked: picked.has(entry.id), onchange: () => { if (box.checked) picked.add(entry.id); else picked.delete(entry.id); refreshBulkPlan(); } });
-      return h("label", { className: "vt-bulk-row" }, box, ` ${shortName(entry.name)}`, ...(warn ? [h("span", { className: "bad", textContent: ` (${warn})` })] : []));
+      return h("label", { className: "vt-bulk-row" }, box, ` ${nameOf(entry)}`, ...(warn ? [h("span", { className: "bad", textContent: ` (${warn})` })] : []));
     });
     return h("div", { className: "vt-confirm" },
       h("h4", { textContent: t("未導入のツールをまとめて導入しますか?") }),
@@ -333,7 +339,7 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     if (stateFilter === "not-installed" && isInstalled) return false;
     const q = query.trim().toLowerCase();
     if (!q) return true;
-    const hay = [entry.name, entry.id, entry.summary_ja, entry.use_when_ja].filter(Boolean).join("\n").toLowerCase();
+    const hay = [entry.name, entry.en?.name, entry.id, entry.summary_ja, entry.en?.summary, entry.use_when_ja, entry.en?.use_when].filter(Boolean).join("\n").toLowerCase();
     return hay.includes(q);
   }
 

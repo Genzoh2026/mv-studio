@@ -53,6 +53,7 @@ Sign-in and API keys are the user's; system software (Python, ffmpeg) is never i
 3. **ライセンスと料金**: 商用利用の条件(例: Remotion は、従業員 4 名以上の営利組織は会社ライセンスが必要)、有料アカウント、クレジットの有無を書く。
 4. **導入コマンドを、決まった形で書く**: project 範囲。公式の手順が user 範囲なら、project に直す。コマンドが確認できないものは、`install` を書かず、`watchlist` に理由を書く。
 5. **メンテナンスの状況**: 小さく新しい、コミットが少ない、出どころが紛らわしいなどは、`notes_ja` か `watchlist` に書く。
+6. **英語版を書く**: 日本語の文があるものは、`video-tools.en.json` に英語を足す(entries の `name` / `summary` / `use_when` / `requires` / `notes` / `manual_steps`、watchlist の `reason`、policy)。リストは日本語と同じ件数で書く。足りない・日本語が残っている・件数が違うときは、カタログを読み込めず、`npm test` も落ちる。Claude には日本語だけが渡る(英語は画面用)。
 6. `npm test` を通す(`test/catalog.test.mjs` が、一覧の形とコマンドを検査します)。
 
 ## 調べた候補 / Where candidates come from

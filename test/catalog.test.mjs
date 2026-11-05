@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { commandProblem, describeCatalog, installState, loadCatalog, validateCatalog } from "../catalog.mjs";
+import { commandProblem, describeCatalog, installState, loadCatalog, mergeEnglish, validateCatalog } from "../catalog.mjs";
 
 const CATALOG_FILE = fileURLToPath(new URL("../catalog/video-tools.json", import.meta.url));
 
@@ -157,4 +157,30 @@ test("a project-scope plugin counts only in the project it was installed in; use
     assert.equal((await installState(plugin, { pjDir, home, plugins: [{ id: "hyper@hyper", scope: "user", enabled: true }] })).state, "installed");
     assert.equal((await installState(plugin, { pjDir, home, plugins: [{ id: "hyper@hyper", scope: "user", enabled: false }] })).state, "partial");
   });
+});
+
+const japaneseEntry = (over = {}) => entry({ summary_ja: "日本語の説明", use_when_ja: "使いどころ", notes_ja: ["注意1", "注意2"], ...over });
+const englishFor = (id = "x-tool") => ({ policy: ["rule"], entries: { [id]: { summary: "summary", use_when: "when", notes: ["note 1", "note 2"] } }, watchlist: {}, sources: {} });
+
+test("the English texts are merged into the entries, and a missing, short or still-Japanese one is named", () => {
+  const catalog = { ...catalogOf(japaneseEntry()), policy_ja: ["規則"] };
+  assert.deepEqual(mergeEnglish(catalog, englishFor()), []);
+  assert.equal(catalog.entries[0].en.summary, "summary");
+  assert.deepEqual(catalog.policy_en, ["rule"]);
+
+  const problems = (en) => mergeEnglish({ ...catalogOf(japaneseEntry()), policy_ja: ["規則"] }, en).join("\n");
+  assert.match(problems({ ...englishFor(), entries: {} }), /entry x-tool: no English texts/);
+  assert.match(problems({ ...englishFor(), entries: { "x-tool": { summary: "s", use_when: "w" } } }), /x-tool\.notes: no English text/);
+  assert.match(problems({ ...englishFor(), entries: { "x-tool": { summary: "s", use_when: "w", notes: ["only one"] } } }), /x-tool\.notes: the English list must have 2 items/);
+  assert.match(problems({ ...englishFor(), entries: { "x-tool": { summary: "まだ日本語", use_when: "w", notes: ["a", "b"] } } }), /x-tool\.summary: Japanese left/);
+});
+
+test("the shipped catalog has English for every Japanese text, and Claude's view of it stays Japanese only", async () => {
+  const catalog = await loadCatalog(CATALOG_FILE); // throws when the English file is incomplete
+  assert.ok(catalog.entries.every((e) => e.en), "every entry has its English texts");
+  const screen = await describeCatalog(catalog, { pjDir: ".", plugins: null });
+  assert.ok(screen.entries.every((e) => e.en) && screen.policy_en?.length);
+  const forClaude = await describeCatalog(catalog, { pjDir: ".", plugins: null, english: false });
+  assert.ok(forClaude.entries.every((e) => !("en" in e)) && !("policy_en" in forClaude), "no English texts sent to Claude");
+  assert.ok(forClaude.watchlist.every((w) => !("reason_en" in w)));
 });

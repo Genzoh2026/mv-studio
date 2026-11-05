@@ -1,0 +1,244 @@
+{
+  "version": 1,
+  "policy": [
+    "Only what is listed here is a candidate for installation. Do not find a skill or plugin on the web and install it (additions are made as a change to the repository).",
+    "Before installing, always show the user what will be installed (name, author, the commands to run, requirements, and whether it costs money or needs sign-in) and get their approval. Never install without approval.",
+    "Installation stays inside this project (every command is project scope). Do not use -g or --scope user. Run the commands exactly as written here (do not rewrite or chain them).",
+    "Sign-in, OAuth and API keys are for the user to do. Claude never types them or asks for them. Paid generation still needs approval each time it runs, as before.",
+    "Claude does not install things that go onto the whole PC, such as Python and ffmpeg (kind: system). Give the user the steps.",
+    "If a newly installed skill or plugin does not show up, tell the user to end this project's Claude and open it again."
+  ],
+  "entries": {
+    "mv-studio-audio": {
+      "name": "MV Studio audio tools (separation and beat analysis)",
+      "summary": "Song separation (vocals, drums, bass, other) and beat analysis. The app hands them to Claude as a tool (mv-studio) every time it starts.",
+      "use_when": "When you add cuts or motion that follow a song. Call list_songs first and check that separation and beat analysis are done.",
+      "manual_steps": ["No installation needed (the app provides it). Install missing tools with setup_audio_tools."]
+    },
+    "suno": {
+      "name": "Suno (song generation)",
+      "license": "Follow the service's terms",
+      "summary": "Song generation and preview. The app hands it to Claude as an MCP every time it starts.",
+      "use_when": "When making a song. Generation uses credits, so get the user's approval before running it. Downloading uses a quota, so only when asked.",
+      "requires": ["A Suno account (sign in with /mcp the first time)"],
+      "manual_steps": ["No installation needed (the app provides it). The first time, open /mcp in Claude's screen and sign in to Suno."]
+    },
+    "hyperframes": {
+      "name": "HyperFrames (render video from HTML)",
+      "summary": "A system that renders HTML, CSS and GSAP animations frame by frame into an MP4 (made by HeyGen, open source). The base for music videos, motion graphics and lyric videos made with code.",
+      "use_when": "When you make motion graphics or a lyric video that follows the song's beat with code, without AI video generation. It works well with this app's beat analysis (.beats.json).",
+      "requires": ["Node.js 22 or newer", "ffmpeg", "Chrome (used headless for rendering)"],
+      "notes": [
+        "Nine skills are installed. reverse-any-video and style-sampling are described in the README as for HyperFrames Pro (possibly paid; check before use).",
+        "Rendering runs code in headless Chrome. The samples load GSAP from a CDN, so it may connect to the network.",
+        "media-use gets materials from HeyGen's service or free local tools. Check the account and pricing before using HeyGen."
+      ]
+    },
+    "painted-animation": {
+      "name": "painted-animation (hand-painted animation, music video with lyrics)",
+      "summary": "Makes watercolor-like hand-painted animation videos from a song and lyrics (LRC) with code only (no image or video generation AI). It covers storyboard, review, lyric sync and export.",
+      "use_when": "When making a watercolor or hand-painted music video. You need the song's audio and lyrics in LRC format.",
+      "requires": ["Claude Opus 5.5 (recommended in the README)", "Node.js", "Google Chrome", "ffmpeg", "Python 3 and numpy (for tempo detection)"],
+      "notes": [
+        "The origin is a little confusing. The README page is Joker-chichi/claude-mv-skill, but the install command points to tuzhechen2005/opus-video-skills. The latter is what gets installed.",
+        "The final export lets you choose \"render in the cloud\". If you choose it, materials and lyrics may leave your computer (the README does not say what is sent). Choose local.",
+        "It runs generated code with Node, Puppeteer and headless Chrome. It is a small, new project (few commits), so check the contents before using it.",
+        "Part of it (tempo detection) overlaps with this app's beat analysis. The app's .beats.json is more detailed because it uses the drums stem."
+      ]
+    },
+    "remotion-skills": {
+      "name": "Remotion (make video with React, official skills)",
+      "license": "See the repository for the skills. Remotion itself has its own license",
+      "summary": "The official skill set for Remotion (a way to make video with React). It holds the practices for creating a project, animation, captions, rendering and preview (13 skills).",
+      "use_when": "When you want to build a video from components in React. Captions (remotion-captions) and rendering (remotion-render) are available too.",
+      "requires": ["Node.js (npx)", "A Remotion project (bun create video, etc.)"],
+      "notes": [
+        "Mind the license: Remotion itself is free for individuals, nonprofits and for-profit organizations with up to 3 employees; other for-profit organizations (4 or more) need a company license (LICENSE.md). The license is due to change with Remotion 5.0. Check with the user before commercial use.",
+        "It does the same thing as HyperFrames in another way. Prefer HyperFrames first and use this when you have a reason to build in React."
+      ]
+    },
+    "motion-graphics-skills": {
+      "name": "motion-graphics-skills (15 kinds of motion graphics)",
+      "summary": "A skill set for motion graphics made with code only (MIT). Brand research, planning, launch videos, diagrams, charts, titles, loops and more. The output is HTML; use HyperFrames, or ffmpeg and Chrome, to export it to MP4.",
+      "use_when": "When making short motion pieces such as promotions, explainers and titles. It is not only for music videos.",
+      "requires": ["Node.js (npx)", "HyperFrames, or ffmpeg and Chrome, to export to MP4", "Claude Opus 5.5 (recommended in the README)"],
+      "notes": [
+        "The flow starts by running brand-intake to make brand.md and MOTION.md.",
+        "It assumes the user's own files are used for logos and screenshots."
+      ]
+    },
+    "gsap-skills": {
+      "name": "GSAP (animation library, official skills)",
+      "summary": "Eight official GSAP (GreenSock) skills: timelines, plugins, performance and more. GSAP is free, plugins included (official README). HyperFrames works also use GSAP.",
+      "use_when": "When you want to write fine timeline-based motion correctly in HyperFrames or similar works.",
+      "requires": ["Node.js (npx)"],
+      "notes": ["It also includes web-page content (scrolltrigger, react, etc.). For video, gsap-timeline and similar are the main ones."]
+    },
+    "comfyui-mcp": {
+      "name": "ComfyUI MCP (generate images from ComfyUI)",
+      "summary": "An MCP that connects to a running ComfyUI to generate images, run workflows and manage models (MIT). Generated images go into the image library (with .gen.json).",
+      "use_when": "When you make the still images that videos start from with a local ComfyUI. ComfyUI must be running.",
+      "requires": ["ComfyUI must be running (port 8188 or 8000)", "Node.js 22 or newer"],
+      "notes": [
+        "No API key is needed (you can optionally set CIVITAI_API_TOKEN etc. for model downloads; the user enters it).",
+        "npx -y fetches and runs the npm package every time it starts. After installing, check the version and suggest pinning it to the user.",
+        "It is added to the project's .mcp.json. Claude Code asks the user for approval the first time it is used.",
+        "Save generated images to Output/image/ under a new name and always write a .gen.json (source data and how it was made) (see the rules)."
+      ]
+    },
+    "topview": {
+      "name": "Topview (Canvas)",
+      "summary": "Create and edit Topview Canvases from an agent and open the Canvas link (MIT).",
+      "use_when": "When you work on videos or images in a Topview Canvas.",
+      "requires": ["A Topview account (sign in with OAuth the first time)"],
+      "notes": [
+        "The official steps (docs/claude.md) use --scope user, but this catalog changes it to project.",
+        "Always get the user's approval before generation that costs money (credits).",
+        "Depending on the environment, it may already be installed in user scope (check the state display)."
+      ]
+    },
+    "kling": {
+      "name": "Kling AI (image-to-video and other generation)",
+      "license": "Follow the service's terms",
+      "summary": "Image and video generation with Kling AI (text-to-video, image-to-video, motion control and more). It is provided through a claude.ai connector.",
+      "use_when": "When making a video cut from an approved still image (generation from stills is the basic use).",
+      "requires": ["A Kling account", "The claude.ai connector setting"],
+      "manual_steps": [
+        "In claude.ai, open Settings > Connectors and enable Kling AI (in this environment, if kling-ai appears under Synced in claude plugin list, it is already synced).",
+        "Sign in the first time.",
+        "Generation uses credits. Each time, show the content and the cost and get the user's approval (do not make trial shots on your own)."
+      ]
+    },
+    "ffmpeg": {
+      "name": "ffmpeg (convert and edit video and audio)",
+      "license": "LGPL / GPL (depends on the build)",
+      "summary": "The standard tool for converting, joining and cutting video and audio. Many things need it: HyperFrames, beat analysis, Demucs and more.",
+      "use_when": "When another tool needs ffmpeg. If it is not installed, have the user install it.",
+      "manual_steps": [
+        "Windows: winget install Gyan.FFmpeg",
+        "macOS: brew install ffmpeg",
+        "Linux: sudo apt install ffmpeg",
+        "After installing, press \"Check again\" in the app's Settings > Audio tools (PATH is read at startup, so restart the app if it is still not found)."
+      ]
+    },
+    "vocaloid-style-mv": {
+      "name": "vocaloid-style-mv (Vocaloid-style MV, JIZURA lyric motion)",
+      "summary": "A pipeline that renders Vocaloid-style MVs in 16:9 and 9:16 (vertical) with code from an audio file and lyrics, using Canvas2D, WebGL2 and JIZURA lyric motion (MIT).",
+      "use_when": "When making a Vocaloid-style MV with strong typography (both landscape and vertical) with code from a song and lyrics.",
+      "requires": ["Node.js 20 or newer", "Python 3.10 or newer", "ffmpeg and ffprobe", "Microsoft Edge or Google Chrome (used for rendering with Playwright)", "Optional: Blender 5.x (for toon 3D), faster-whisper (for automatic lyric sync)"],
+      "notes": [
+        "The first setup (setup.ps1 / setup.sh) fetches npm and pip packages and OFL fonts, and clones and builds JIZURA (MIT, pinned to commit fc16bfe).",
+        "The README's steps copy the folder by hand, but this catalog copies it in project scope with npx skills add.",
+        "It includes tools/gigafile_upload.mjs (upload to GigaFile). That sends data outside, so do not run it without the user's explicit instruction."
+      ]
+    },
+    "kinetic-reel": {
+      "name": "kinetic-reel (typography, beat-synced reel)",
+      "summary": "A plugin (MIT) from the same author as painted-animation (opus-video-skills). It layers 2D Canvas typography, three.js 3D layers and WebGL post effects into a 15-30 second kinetic typography video, exported with headless Chrome and ffmpeg.",
+      "use_when": "When making a short typography video or reel with code that combines moving text with 3D and shader effects.",
+      "requires": ["Claude Opus 4.6 (recommended in the README)", "Node.js", "Google Chrome", "ffmpeg"],
+      "notes": [
+        "In the standard flow, 120 BPM sound effects and BGM are synthesized automatically by a Node script (you can pass your own audio with --audio of render.mjs).",
+        "It uses an HTML template that loads three.js from the unpkg CDN, so it connects to the network when rendering."
+      ]
+    },
+    "kinetic-typography-skills": {
+      "name": "kinetic-typography (moving text, lyric card design)",
+      "summary": "A skill (MIT) that gathers the practices for text-splitting animation, variable-font weight changes, text along a path, and designing lyric and title cards. It supports CSS, GSAP, Framer Motion and Remotion, and includes a step to check a given time as a still with ?t=.",
+      "use_when": "When you want to carefully design text motion, easing and readability for an MV's lyric display or title cards.",
+      "requires": ["Node.js (npx)"],
+      "notes": [
+        "A knowledge skill with no script to run (SKILL.md and references/); it needs no outside communication or API key.",
+        "The README has a link to the service it was made with (iart.ai), but it has nothing to do with using the skill itself."
+      ]
+    },
+    "mort1d-motion-graphics": {
+      "name": "motion-graphics (Mort1d version, HTML motion and beat cuts)",
+      "summary": "A plugin (MIT, zero npm dependencies) that renders HTML scenes from Chrome/Edge at 60 fps with sub-frame motion blur, and combines them with beat cuts of your own video and image footage and shader backgrounds.",
+      "use_when": "When you want to cut your own video clips and stills to the beat while layering HTML typography and shader backgrounds.",
+      "requires": ["Node.js 22.4 or newer", "ffmpeg and ffprobe", "Google Chrome / Microsoft Edge / Chromium"],
+      "notes": [
+        "All seven bundled typefaces are under the SIL Open Font License 1.1.",
+        "The bundled site-kit.mjs and ref-sheet.mjs fetch outside sites and public posts when given a URL. Use them only when the user instructs you to."
+      ]
+    },
+    "motion-launch-videos": {
+      "name": "motion-launch-videos (short Canvas motion, 12 skills)",
+      "summary": "A plugin (MIT) that exports a single-HTML seek(t) Canvas animation to MP4, GIF and poster images with motion blur. It includes 12 specialist skills: shapes, cartoon, 3D, charts, pixels, particles, captions and more.",
+      "use_when": "When you want to quickly make 16:9, 9:16 and 1:1 short animations and teasers with pure Canvas code.",
+      "requires": ["Node.js 20 or newer", "playwright-core and Chromium / Chrome", "ffmpeg and ffprobe", "npm and tar (for the font download script)"],
+      "notes": [
+        "scripts/fonts.mjs runs npm pack @fontsource/<pkg>@5 to get WOFF2 fonts and embeds them in the HTML as base64.",
+        "It does not handle audio (it outputs video-only MP4 / GIF). To match a song, join them with ffmpeg or similar."
+      ]
+    },
+    "motion-reel": {
+      "name": "motion-reel (Remotion music-synced reel, lyric video)",
+      "summary": "A plugin (MIT) that analyzes the beats, structure and vocal timing of your own song file, builds a music-synced motion reel or lyric video with Remotion, and exports it to MP4/WebM.",
+      "use_when": "When you want to automatically build a beat-synced lyric video or short video with Remotion from a song file and lyrics.",
+      "requires": ["Node.js 18 or newer", "uv (used to run the Python packages librosa, faster-whisper and others)"],
+      "notes": [
+        "The audio analysis script fetches librosa and faster-whisper with uv run --with and runs them. If this app's beat analysis (.beats.json) already exists, you can compare the results.",
+        "There is a script that records history in ~/.claude/motion-reel/log.json so effects do not repeat past ones.",
+        "Mind Remotion's license terms (for-profit organizations with 4 or more employees need a company license). It is a new repository with a single commit, so check the scripts before using it."
+      ]
+    },
+    "remotion-motion-graphics": {
+      "name": "remotion-motion-graphics (practices for Remotion motion design)",
+      "summary": "A set of design rules and templates (MIT) for making cinematic titles, kinetic typography, charts, particles, waveform visualizers and more in Remotion.",
+      "use_when": "When you want to raise the quality of color, typography, camera work and transitions in a Remotion video. It can be used together with the official remotion-skills.",
+      "requires": ["Node.js (npx)", "A Remotion project"],
+      "notes": [
+        "A skill of knowledge and component examples; it needs no outside API or extra charges.",
+        "The README's steps copy the folder by hand, but this catalog copies it in project scope with npx skills add.",
+        "Mind Remotion's license terms (for-profit organizations with 4 or more employees need a company license)."
+      ]
+    },
+    "claude-music-video": {
+      "name": "music-video-generator (beat-synced, shader-composited MV)",
+      "summary": "An MV plugin (MIT) that analyzes a song's beats, then edits your own videos and photos, or public-domain footage from the Internet Archive, to the beat and composites them with OpenGL shaders.",
+      "use_when": "When you want to put your own video clips or archive footage into an MV with the song's beat and GPU shader effects.",
+      "requires": ["Python 3.10-3.13 (librosa, moderngl, opencv-python, rembg, etc.)", "ffmpeg", "A GPU that supports OpenGL 3.3"],
+      "notes": [
+        "The README says it was developed and verified on macOS (Apple Silicon), with fallback implementations for Windows / Linux (not verified).",
+        "The archive footage mode connects to archive.org to search and download videos. The AI video generation mode (optional) uses paid credits of an external MCP, so get the user's approval first.",
+        "It saves usage history to ~/.claude/music-video/."
+      ]
+    },
+    "ai-music-video": {
+      "name": "ai-music-video (MV beat grid, lyric sync, acceptance checks)",
+      "summary": "A skill and Python helper scripts (MIT) that gather an 8-stage MV workflow: beat grid calculation, lyric timing, storyboard, contact-sheet acceptance and sync checks.",
+      "use_when": "When you want to rigorously handle beat matching, lyric sync and frame acceptance for an MV drawn with code (Canvas / Remotion etc.) or made from video clips.",
+      "requires": ["Node.js (npx)", "Python 3.10 or newer (numpy, scipy, soundfile, pillow)", "ffmpeg and ffprobe", "Optional: faster-whisper or whisper-timestamped (for automatic lyric alignment)"],
+      "notes": [
+        "It includes design procedures for both drawing with code only (free) and using external image and video generation AI. If you use a paid generation service, always get the user's approval first.",
+        "The README's steps copy the folder by hand, but this catalog copies it in project scope with npx skills add. It is a new repository with 4 commits, so check the scripts before using it."
+      ]
+    },
+    "song-video-director": {
+      "name": "song-video-director (MV direction and code design from song analysis)",
+      "summary": "A skill (MIT) that puts a song's musical features (BPM, key, energy per section) into JSON from the song and lyrics, and designs direction, color and code drawing (Remotion / p5.js / Three.js) to fit the song.",
+      "use_when": "When you want to settle the whole MV's structure, direction plan and visualizer design from the song's development and the lyrics' themes.",
+      "requires": ["Node.js (npx)", "Python 3 (librosa, numpy; when using song_facts.py)", "ffmpeg"],
+      "notes": [
+        "It ships with song_facts.py, whose role is close to this app's beat analysis (.beats.json). Use the app's beat analysis first and refer to it as a supplement if needed.",
+        "The README's steps copy the folder by hand, but this catalog copies it in project scope with npx skills add. It is a new repository with a single commit."
+      ]
+    }
+  },
+  "watchlist": {
+    "lintsinghua/paint-mv-skills": { "reason": "A watercolor hand-painted MV skill (the repository itself is MIT), but the drawing engine code is not bundled; it clones JohnHeibel/PDoomVideo, which has no stated license, from outside with fetch_upstream.mjs on first run, so it is on hold. painted-animation (MIT) in the list makes the same kind of watercolor MV." },
+    "howseen-ai/claude-motion-design": { "reason": "Marked CAUTION in awesome-claude-video-skills. Checking the primary source: SKILL.md is written assuming the author's personal local paths (~/Desktop/Howseen AI/...), the bundled mcp21_client.py reads ~/.config/21st.key and sends to the 21st.dev API, and it includes scraping scripts for Mixkit and others, so it is passed over." },
+    "ShuaiMXu/mv-skills-bundle": { "reason": "A bundle of 6 skills (MIT), but the workflow assumes paid external services (GPT Image 2 + Seedance 2.0 + Suno V5; about 162-213 yuan per video according to the README), and the install steps clone to ~/.claude/skills and create symbolic links (user scope), so it is on hold." },
+    "fradser/dotclaude の music-to-video": { "name": "music-to-video in fradser/dotclaude", "reason": "There is information that it suits lyric videos, but on the repository page I could not confirm that music-to-video exists, how to install it or what it needs. Add it once confirmed." },
+    "bestagentkits/motion-video-skill": { "reason": "It can make videos to the beat, but it needs paid Gemini and ElevenLabs accounts (via the multix CLI) and runs an external package automatically with npx --yes. It has only 2 commits and is new. It is not essential for an MV, so it is on hold." },
+    "Sunwood-ai-labs/hyperframes-motion-reel-skill": { "reason": "It can make beat-synced reels, but it is for generating the music automatically with a script, which does not suit an MV that uses the user's song. It installs by cloning into ~/.claude (whole-account installation) and has few commits." },
+    "ecliptic-ai/skills の beat-sync-video-editing": { "name": "beat-sync-video-editing in ecliptic-ai/skills", "reason": "It depends on the Gemini API. This app's local beat analysis is enough, so it is on hold." },
+    "anthropics/skills(Creative & Design)": { "name": "anthropics/skills (Creative & Design)", "reason": "Anthropic's official skill set (mostly Apache-2.0). I found nothing video-specific, and I have not checked the contents (skill names) of the image and design ones. Add it once confirmed." },
+    "emilkowalski/skills(animate ほか)": { "name": "emilkowalski/skills (animate and others)", "reason": "For web UI motion (buttons, modals, etc.). The purpose differs from video production, so it is out of scope." }
+  },
+  "sources": {
+    "https://github.com/zhuyansen/awesome-claude-video-skills": "awesome-claude-video-skills (a list of video skills, with third-party safety ratings per repository)",
+    "https://github.com/frankxai/awesome-motion-design-agent-skills": "awesome-motion-design-agent-skills (a list of motion design skills)"
+  }
+}

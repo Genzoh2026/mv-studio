@@ -106,7 +106,58 @@ export async function loadCatalog(path) {
   const catalog = JSON.parse(await readFile(path, "utf8"));
   const problems = validateCatalog(catalog);
   if (problems.length) throw new Error(`the catalog is invalid:\n${problems.join("\n")}`);
+  // The English texts live beside it (video-tools.en.json) and are merged in; without that file the catalog stays Japanese only.
+  const english = await readFile(path.replace(/\.json$/, ".en.json"), "utf8").then((text) => JSON.parse(text), (err) => { if (err.code === "ENOENT") return null; throw err; });
+  if (english) {
+    const englishProblems = mergeEnglish(catalog, english);
+    if (englishProblems.length) throw new Error(`the English catalog is incomplete:\n${englishProblems.join("\n")}`);
+  }
   return catalog;
+}
+
+const JAPANESE = /[\u3040-\u30ff\u4e00-\u9fff]/;
+const hasJapanese = (value) => JAPANESE.test(JSON.stringify(value ?? ""));
+
+/**
+ * Adds the English texts to the catalog (entry.en, watchlist[].name_en / reason_en, policy_en, sources_to_watch[].name_en) and
+ * returns what is missing or does not line up: every Japanese text needs an English one, lists with the same number of items.
+ */
+export function mergeEnglish(catalog, english) {
+  const problems = [];
+  const need = (where, ja, en, isList = false) => {
+    if (!hasJapanese(ja)) return;
+    if (en === undefined || en === null || en === "") problems.push(`${where}: no English text`);
+    else if (isList && (!Array.isArray(en) || en.length !== ja.length)) problems.push(`${where}: the English list must have ${ja.length} items`);
+    else if (hasJapanese(en)) problems.push(`${where}: Japanese left in the English text`);
+  };
+  need("policy", catalog.policy_ja, english.policy, true);
+  catalog.policy_en = english.policy;
+  for (const entry of catalog.entries) {
+    const en = english.entries?.[entry.id];
+    if (!en) { problems.push(`entry ${entry.id}: no English texts`); continue; }
+    need(`${entry.id}.name`, entry.name, en.name);
+    need(`${entry.id}.license`, entry.license, en.license);
+    need(`${entry.id}.summary`, entry.summary_ja, en.summary);
+    need(`${entry.id}.use_when`, entry.use_when_ja, en.use_when);
+    need(`${entry.id}.requires`, entry.requires, en.requires, true);
+    need(`${entry.id}.notes`, entry.notes_ja, en.notes, true);
+    need(`${entry.id}.manual_steps`, entry.manual_steps_ja, en.manual_steps, true);
+    entry.en = en;
+  }
+  for (const item of catalog.watchlist ?? []) {
+    const en = english.watchlist?.[item.name];
+    if (!en) { problems.push(`watchlist "${item.name}": no English texts`); continue; }
+    need(`watchlist "${item.name}".reason`, item.reason_ja, en.reason);
+    need(`watchlist "${item.name}".name`, item.name, en.name ?? (hasJapanese(item.name) ? undefined : item.name));
+    item.reason_en = en.reason;
+    item.name_en = en.name ?? item.name;
+  }
+  for (const item of catalog.sources_to_watch ?? []) {
+    const en = english.sources?.[item.source];
+    need(`source ${item.source}`, item.name, en);
+    item.name_en = en ?? item.name;
+  }
+  return problems;
 }
 
 const exists = (path) => access(path).then(() => true, () => false);
@@ -159,12 +210,14 @@ export async function installState(entry, { pjDir, home = homedir(), plugins }) 
 }
 
 /** The catalog for Claude: each entry with where it stands, filtered by category when asked. */
-export async function describeCatalog(catalog, { pjDir, plugins, category, home }) {
+export async function describeCatalog(catalog, { pjDir, plugins, category, home, english = true }) {
   const entries = catalog.entries.filter((entry) => !category || entry.category.includes(category));
   const described = [];
   for (const entry of entries) {
-    const { evidence, ...shown } = entry;
-    described.push({ ...shown, installed: await installState(entry, { pjDir, home, plugins }) });
+    const { evidence, en, ...shown } = entry;
+    // The English texts are for the screen; Claude reads the catalog in Japanese and is not sent them (they would only cost tokens).
+    described.push({ ...shown, ...(english && en ? { en } : {}), installed: await installState(entry, { pjDir, home, plugins }) });
   }
-  return { policy_ja: catalog.policy_ja, updated: catalog.updated, entries: described, watchlist: category ? undefined : catalog.watchlist };
+  const watchlist = category ? undefined : (english ? catalog.watchlist : catalog.watchlist?.map(({ name_en, reason_en, ...item }) => item));
+  return { policy_ja: catalog.policy_ja, ...(english && catalog.policy_en ? { policy_en: catalog.policy_en } : {}), updated: catalog.updated, entries: described, watchlist };
 }

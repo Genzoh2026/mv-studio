@@ -19,6 +19,7 @@ Write lyrics and style with Claude and make songs with Suno, keep songs, images 
 | ゴミ箱 | 削除は `_Trash` への移動だけ。戻せる。完全削除はゴミ箱画面で確認してから |
 | ライブラリ(🧩) | 動画づくりに役立つスキル・プラグインの一覧と、ワンボタン導入(全プロジェクトに導入も可) |
 | Claude 用ツール(MCP) | Claude が曲の分離・ビート解析・ピンの読み書きをアプリ経由で行う |
+| 日本語 / English | 左端の 🌐(⏻ の上)で画面の言語を切り替え。初回はブラウザの言語に合わせる。Claude に送る指示文やピンの修正指示も、その言語で書かれる |
 
 ## 使い方 / Quick start
 
