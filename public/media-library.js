@@ -295,9 +295,9 @@ export function createMediaLibrary({ root, getProject, kind, openOther, typeToTe
       h("button", { type: "button", textContent: "ごみ箱へ", onclick: async () => { close(); await trash([item.name]); } }),
       h("button", { type: "button", textContent: "✕", title: "閉じる(Esc)", onclick: close }));
     if (reviewPanel) {
-      // A video gets the whole width: the picture with its pins, the pin list under it, and the provenance folded away below.
+      // A video gets the width: the picture with its pins, a narrow pin list at its right (so more comments never shrink the picture), and the provenance folded away below.
       aside.classList.add("folded");
-      viewer.replaceChildren(header, h("div", { className: "img-stage single" }, media), reviewPanel.dock, h("details", { className: "rv-origin" }, h("summary", { textContent: "出所・生成情報" }), aside));
+      viewer.replaceChildren(header, h("div", { className: "img-stage review" }, media, reviewPanel.dock), h("details", { className: "rv-origin" }, h("summary", { textContent: "出所・生成情報" }), aside));
       return;
     }
     viewer.replaceChildren(header,
