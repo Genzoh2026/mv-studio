@@ -1,13 +1,24 @@
 # MV Studio
 
-左に **Claude Code のターミナル**、右に **歌詞づくりと曲の一覧** を並べる、ローカルで動く小さなアプリです。
-歌詞・スタイル・設定を人と Claude で一緒に作り、Suno に生成を依頼し、できた曲をダウンロードする前に試聴できます。
+左に **Claude Code のターミナル**、右に **MV づくりの素材と作品** を並べる、ローカルで動くアプリです。
+歌詞・スタイルを Claude と作って Suno で曲にし、曲・画像・動画をライブラリで管理し、動画には「ピン」で修正指示を出せます。
 
-A small local app: a real **Claude Code terminal** on the left, a **drafting space and your songs** on the right.
-Write lyrics, style and settings together with Claude, send them to Suno, and listen to the results *before* spending a
-monthly download credit.
+A local app: a real **Claude Code terminal** on the left, and the **assets and results of a music video** on the right.
+Write lyrics and style with Claude and make songs with Suno, keep songs, images and videos in libraries, and pin comments on a video to tell Claude what to fix.
 
-> Status: early and deliberately small. Verified on Windows only. / 初期段階で、あえて小さくしています。動作確認は Windows のみです。
+> Status: early. Verified on Windows only. / 初期段階です。動作確認は Windows のみです。
+
+### できること / What it does
+
+| | |
+|---|---|
+| 歌詞・曲 | 人の案と Claude の案を並べて作り、Suno に生成を依頼。聴いてから、残す曲だけダウンロード |
+| 曲の分離・ビート解析 | Demucs で声・ドラム・ベース・その他に分け、キック・スネア・ハイハットの時刻を解析(任意。ワンボタンで導入) |
+| 画像・動画ライブラリ | ドラッグ&ドロップで追加。番号(#1, #2…)で Claude に指示。Claude が作ったものには出所(元データ・生成方法)を記録 |
+| 動画へのピン | 動画の時刻と位置にコメントを付け、Claude に修正を依頼。直ったかを確認できる |
+| ゴミ箱 | 削除は `_Trash` への移動だけ。戻せる。完全削除はゴミ箱画面で確認してから |
+| ライブラリ(🧩) | 動画づくりに役立つスキル・プラグインの一覧と、ワンボタン導入(全プロジェクトに導入も可) |
+| Claude 用ツール(MCP) | Claude が曲の分離・ビート解析・ピンの読み書きをアプリ経由で行う |
 
 ## 使い方 / Quick start
 
@@ -103,10 +114,13 @@ Open a video in the video library, turn on "ピンを打つ" and click the pictu
 
 ## セキュリティ / Security
 
-- `127.0.0.1` のみで待ち受けます。WebSocket とファイルを変更する API は、同一オリジンのみ受け付けます。
+- `127.0.0.1` のみで待ち受けます。ブラウザからは `http://127.0.0.1:ポート` か `http://localhost:ポート` で開けます。それ以外の名前での接続(他サイトが名前を付け替えて入る DNS リバインディング)は、すべて拒否します。
+- ファイルを変更する API と WebSocket(ターミナル)は、アプリ自身のページ(同一オリジン)からだけ受け付けます。
 - ターミナルは、あなたの PC でシェルを動かします。**ポートを外部に公開しないでください。**
 - ボタンがターミナルに入力する文字列は 1 行のみで、改行や制御文字は拒否されます(勝手に送信されません)。
-- 音声ファイルは、PJ の `Output/` 内のものだけを配信します。
+- 音声・画像・動画は、PJ の `Output/` 内のものだけを配信します。
+- Claude 用ツール(MCP)は、起動のたびに作られる秘密から導いた PJ ごとのトークンで守られ、その PJ にしか触れません。削除やゴミ箱の操作はできません。
+- 🧩 ライブラリの導入ボタンは、**第三者のスキル・プラグインを取得して実行します**。実行できるのは、同梱の一覧(`catalog/video-tools.json`)に書かれた決まった形のコマンドだけで、実行前にコマンドと場所を確認画面に出し、あなたが承認したときだけ動きます。既定ではプロジェクト内(project 範囲)にだけ入り、あなたの Claude 全体の設定は変わりません。導入するものの内容は、配布元で確認してください。
 
 ## 既知の制限 / Known limits
 
@@ -115,7 +129,12 @@ Open a video in the video library, turn on "ピンを打つ" and click the pictu
 - 「完成させて生成まで任せる」「この案で生成」は、Suno の生成枠を使うため、開発中は通しで検証できていません。
 - Claude が `Drafts/*.claude.json` や `suno.json` を、ルールどおりに書くことに依存しています(壊れていた場合は、画面にエラーを出し、ファイルには触れません)。
 - 1 回の生成で何曲できるかは Suno 側の仕様です。返ってきた曲は全部カードになります。
-- 自動テストはありません。
+- 動画へのピンは、Claude が実際に修正して完了まで進む流れを、実機の Claude では通しで検証していません(アプリ側の判定はテスト済みです)。
+- ライブラリの導入ボタンで第三者のプラグインを実際に入れる動作は、通しでは検証していません(コマンドの組み立てと実行順はテスト済みです)。
+
+## テスト / Tests
+
+`npm test`(Node 組み込みのテストランナー)で、自動テストが動きます。ファイルの扱い、ゴミ箱、番号、ピン、MCP、導入コマンドの検査、サーバーのホスト・オリジン検査などを確認します。実機の Claude・Suno・Demucs は使いません。
 
 ## ライセンス / License
 
