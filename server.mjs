@@ -553,7 +553,12 @@ async function existingPjDir(name) {
   return dir && (await stat(dir).then((s) => s.isDirectory(), () => false)) ? dir : null;
 }
 
-const sameOrigin = (req) => req.headers.origin === `http://${HOST}:${PORT}`;
+// This server is for the browser on this computer only. A page from another site can still reach it by pointing its own
+// name at 127.0.0.1 (DNS rebinding); such a request carries the other site's name in Host, so only our own names are served.
+// "localhost" is accepted too, because that is what people type.
+const OWN_HOSTS = new Set([`${HOST}:${PORT}`, `localhost:${PORT}`]);
+const ownHost = (req) => OWN_HOSTS.has(req.headers.host);
+const sameOrigin = (req) => ownHost(req) && OWN_HOSTS.has(String(req.headers.origin ?? "").replace(/^http:\/\//, ""));
 
 function json(res, status, value) {
   res.writeHead(status, { "content-type": "application/json" });
@@ -571,6 +576,10 @@ function shutdown(code) {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${HOST}`);
+  if (!ownHost(req)) {
+    res.writeHead(403, { "content-type": "text/plain" });
+    return res.end("bad host");
+  }
   try {
     if (await agentApi(req, res, url)) return;
     const fixed = STATIC[url.pathname];
@@ -816,7 +825,10 @@ const server = createServer(async (req, res) => {
     res.end("not found");
   } catch (err) {
     console.error(`${req.method} ${url.pathname}:`, err.message);
-    json(res, err instanceof ConflictError ? 409 : 400, { error: err.message });
+    // File-system and other unexpected failures (they carry an errno code) are the app's fault and may name local paths:
+    // log them, tell the page only that it failed. Everything else is a message meant for the user.
+    if (typeof err.code === "string") return json(res, 500, { error: "internal error (see the app's log)" });
+    json(res, err instanceof ConflictError ? 409 : 400, { error: err instanceof SyntaxError ? "invalid JSON" : err.message });
   }
 });
 
@@ -824,6 +836,17 @@ const wss = new WebSocketServer({ server, path: "/term" });
 wss.on("connection", async (ws, req) => {
   // Block other sites from opening a shell on this machine.
   if (!sameOrigin(req)) return ws.close(1008, "bad origin");
+  try {
+    await connectTerminal(ws, req);
+  } catch (err) {
+    // A session that cannot start (for example the terminal process fails to spawn) must not take the whole server down.
+    console.error("terminal connection failed:", err.message);
+    ws.send(`\r\n[could not start the session: ${err.message}]\r\n`);
+    ws.close(1011, "session failed");
+  }
+});
+
+async function connectTerminal(ws, req) {
   const dir = pjDir(new URL(req.url, `http://${HOST}`).searchParams.get("pj"));
   if (!dir || !(await stat(dir).then((s) => s.isDirectory(), () => false))) return ws.close(1008, "bad project");
   const name = basename(dir);
@@ -842,7 +865,10 @@ wss.on("connection", async (ws, req) => {
     ws.send(`\r\n[${err.message}]\r\n`);
     ws.close(1013, "session limit");
   }
-});
+}
+
+// A failure nobody caught is logged, not fatal: one bad request or job must not end every running Claude session.
+process.on("unhandledRejection", (reason) => console.error("unhandled rejection:", reason instanceof Error ? reason.stack : reason));
 
 // Sessions are child processes of this server; take them down with it.
 for (const signal of ["SIGINT", "SIGTERM"]) {
