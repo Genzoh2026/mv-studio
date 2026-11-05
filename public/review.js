@@ -54,7 +54,9 @@ export function createReviewPanel({ project, name, video, typeToTerminal, isClau
       unsaved = true;
       return toast(res ? (await res.json()).error : "ピンを保存できませんでした", { key: "review-save", kind: "error" });
     }
-    adopt(await res.json());
+    const stored = await res.json();
+    // Typing went on while this was saved: the stored list is older than the screen, so keep the screen (the next save follows).
+    if (!unsaved) adopt(stored);
   }
   const saveSoon = () => { unsaved = true; clearTimeout(saveTimer); saveTimer = setTimeout(save, SAVE_DELAY_MS); };
 
@@ -127,7 +129,16 @@ export function createReviewPanel({ project, name, video, typeToTerminal, isClau
   function pinCard(pin) {
     const sent = pin.sentAt && !unsaved;
     const area = h("textarea", { value: pin.text, placeholder: "どう直したいか(例: 口元を隠す / 色を明るく / この拍で切る)", rows: 2 });
-    area.addEventListener("input", () => { pin.text = area.value; pin.sentAt = null; saveSoon(); updateActions(); });
+    // The list is replaced by the stored one after every save, while this box stays on screen: always edit the pin that is
+    // in the list NOW (by number), never the object this box was built with.
+    area.addEventListener("input", () => {
+      const current = pins.find((other) => other.id === pin.id);
+      if (!current) return;
+      current.text = area.value;
+      current.sentAt = null;
+      saveSoon();
+      updateActions();
+    });
     area.addEventListener("focus", () => { selected = pin.id; drawMarks(); });
     area.addEventListener("blur", save);
     const el = h("div", { className: `rv-item${pin.id === selected ? " sel" : ""}` },
