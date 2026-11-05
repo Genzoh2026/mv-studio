@@ -9,8 +9,11 @@ import { settingsTool } from "/settings.js";
 import { libraryTool } from "/library.js";
 import { trashTool } from "/trash.js";
 import { powerTool } from "/power.js";
+import { locale, t, translateStatic } from "/i18n.js";
+import { langTool } from "/lang.js";
 
 const $ = (id) => document.getElementById(id);
+translateStatic(); // the fixed markup of index.html; everything drawn by the scripts goes through t()
 const libraryBox = $("library");
 const songsBox = $("songs");
 
@@ -24,7 +27,7 @@ const term = new Terminal({ fontSize: 14, cursorBlink: true, theme: { background
 const fit = new FitAddon.FitAddon();
 term.loadAddon(fit);
 term.open($("term"));
-term.write("プロジェクトを開くと、ここで Claude が起動します。\r\n");
+term.write(t("プロジェクトを開くと、ここで Claude が起動します。") + "\r\n");
 let ws = null;
 const CLAUDE_MISSING_CLOSE_CODE = 4004; // the server already printed install help into the terminal
 
@@ -106,7 +109,7 @@ createRail({
   rail: $("rail"),
   panel: $("rail-panel"),
   handle: $("rail-handle"),
-  tools: [settingsTool, libraryTool, trashTool, powerTool],
+  tools: [settingsTool, libraryTool, trashTool, langTool, powerTool],
   onLayout: () => fit.fit(),
 });
 
@@ -144,11 +147,11 @@ function renderBar() {
   const text = document.createElement("span");
   const buttons = [];
   if (confirming) {
-    text.textContent = `次の ${selected.size} 件を workspace\\_Trash へ移動します(完全には削除されません): ${[...selected].join("、")}`;
-    buttons.push(button("移動する", moveSelectedToTrash, "danger"), button("やめる", () => { confirming = false; renderBar(); }));
+    text.textContent = t("次の {n} 件を workspace\\_Trash へ移動します(完全には削除されません): {names}", { n: selected.size, names: [...selected].join(t("、")) });
+    buttons.push(button(t("移動する"), moveSelectedToTrash, "danger"), button(t("やめる"), () => { confirming = false; renderBar(); }));
   } else {
-    text.textContent = `${selected.size} 件を選択中`;
-    buttons.push(button("ゴミ箱へ移動", () => { confirming = true; renderBar(); }, "danger"), button("選択解除", clearSelection));
+    text.textContent = t("{n} 件を選択中", { n: selected.size });
+    buttons.push(button(t("ゴミ箱へ移動"), () => { confirming = true; renderBar(); }, "danger"), button(t("選択解除"), clearSelection));
   }
   bar.replaceChildren(text, ...buttons);
 }
@@ -180,10 +183,10 @@ async function moveSelectedToTrash() {
   if (!res.ok) { toast(body.error, { kind: "error" }); return; }
   if (body.moved.includes(attached)) attached = "";
   if (body.failed.length) {
-    toast(`移動できなかった PJ: ${body.failed.map((f) => `${f.name}(${f.error})`).join("、")}`, { key: "trash-failed", kind: "error" });
+    toast(t("移動できなかった PJ: {list}", { list: body.failed.map((f) => `${f.name}(${f.error})`).join(t("、")) }), { key: "trash-failed", kind: "error" });
   }
   if (body.moved.length) {
-    toast(`${body.moved.length} 件を workspace\\_Trash へ移動しました(左端のゴミ箱から戻せます)`, { key: "trash-done" });
+    toast(t("{n} 件を workspace\\_Trash へ移動しました(左端のゴミ箱から戻せます)", { n: body.moved.length }), { key: "trash-done" });
   }
   selected.clear();
   confirming = false;
@@ -196,9 +199,9 @@ function renderLibrary() {
   const q = $("lib-filter").value.trim().toLowerCase();
   const shown = projects.filter((p) => p.name.toLowerCase().includes(q));
   if (!projects.length) {
-    return libraryBox.replaceChildren(note("プロジェクトがありません。右上の「+ 新規」で作成してください。"));
+    return libraryBox.replaceChildren(note(t("プロジェクトがありません。右上の「+ 新規」で作成してください。")));
   }
-  if (!shown.length) return libraryBox.replaceChildren(note("該当する PJ がありません。"));
+  if (!shown.length) return libraryBox.replaceChildren(note(t("該当する PJ がありません。")));
   const grid = document.createElement("div");
   grid.className = "grid";
   grid.append(...shown.map(projectCard));
@@ -233,14 +236,14 @@ function projectCard(project) {
   name.textContent = title;
   const meta = document.createElement("div");
   meta.className = "meta";
-  meta.textContent = [date, `${project.songs}曲`].filter(Boolean).join(" · ");
+  meta.textContent = [date, t("{n}曲", { n: project.songs })].filter(Boolean).join(" · ");
   const pick = document.createElement("input");
   pick.type = "checkbox";
   pick.className = "pick";
   pick.checked = selected.has(project.name);
   pick.disabled = project.running;
-  pick.title = project.running ? "実行中は削除できません。先に「終了」してください" : "削除する PJ として選択";
-  pick.setAttribute("aria-label", `${title} を選択`);
+  pick.title = project.running ? t("実行中は削除できません。先に「終了」してください") : t("削除する PJ として選択");
+  pick.setAttribute("aria-label", t("{name} を選択", { name: title }));
   pick.addEventListener("click", (event) => event.stopPropagation());
   pick.addEventListener("change", () => {
     if (pick.checked) selected.add(project.name); else selected.delete(project.name);
@@ -253,11 +256,11 @@ function projectCard(project) {
     const row = document.createElement("div");
     row.className = "running";
     const dot = document.createElement("span");
-    dot.textContent = "● 実行中";
+    dot.textContent = t("● 実行中");
     const end = document.createElement("button");
     end.type = "button";
-    end.textContent = "終了";
-    end.title = "この PJ の Claude を終了する";
+    end.textContent = t("終了");
+    end.title = t("この PJ の Claude を終了する");
     end.addEventListener("click", (event) => { event.stopPropagation(); endSession(project.name); });
     row.append(dot, end);
     el.append(row);
@@ -301,7 +304,7 @@ async function redrawSongsIfChanged() {
   songChecks.clear();
   songTools.resetLines();
   if (!songs.length) {
-    return songsList.replaceChildren(note("曲はまだありません。ここへ曲(mp3・wav・m4a・ogg)をドラッグ&ドロップするか、左の Claude に「Suno で曲を作って、試聴用に保存して」と頼んでください。"));
+    return songsList.replaceChildren(note(t("曲はまだありません。ここへ曲(mp3・wav・m4a・ogg)をドラッグ&ドロップするか、左の Claude に「Suno で曲を作って、試聴用に保存して」と頼んでください。")));
   }
   songsList.replaceChildren(...songs.map(songCard));
 }
@@ -310,9 +313,9 @@ async function redrawSongsIfChanged() {
 const MAX_SONG_FILES = 10;
 const MAX_SONG_BYTES = 200 * 1024 * 1024;
 const songsList = document.createElement("div");
-const songsDrop = Object.assign(document.createElement("div"), { className: "img-drop", hidden: true, textContent: "ここにドロップして追加" });
+const songsDrop = Object.assign(document.createElement("div"), { className: "img-drop", hidden: true, textContent: t("ここにドロップして追加") });
 const songsPicker = Object.assign(document.createElement("input"), { type: "file", multiple: true, hidden: true, accept: "audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,audio/ogg,.mp3,.wav,.m4a,.ogg" });
-const songsAdd = Object.assign(document.createElement("button"), { type: "button", textContent: "+ 曲を追加", onclick: () => songsPicker.click() });
+const songsAdd = Object.assign(document.createElement("button"), { type: "button", textContent: t("+ 曲を追加"), onclick: () => songsPicker.click() });
 const songsProgress = Object.assign(document.createElement("span"), { className: "meta" });
 const songsToolbar = Object.assign(document.createElement("div"), { className: "img-toolbar" });
 songsToolbar.append(songsAdd, songsProgress, songsPicker);
@@ -350,15 +353,15 @@ function renderSongsBar() {
   const text = (textContent) => Object.assign(document.createElement("span"), { textContent });
   if (confirmingSongs) {
     return songsBar.replaceChildren(
-      text(`${count} 曲を、付随ファイル(Suno 情報・解析・歌詞など)ごと workspace\\_Trash へ移動します。完全には削除されません。続けますか?`),
-      button("ごみ箱へ移動", trashSelectedSongs, "danger"),
-      button("やめる", () => { confirmingSongs = false; renderSongsBar(); }),
+      text(t("{n} 曲を、付随ファイル(Suno 情報・解析・歌詞など)ごと workspace\\_Trash へ移動します。完全には削除されません。続けますか?", { n: count })),
+      button(t("ごみ箱へ移動"), trashSelectedSongs, "danger"),
+      button(t("やめる"), () => { confirmingSongs = false; renderSongsBar(); }),
     );
   }
   songsBar.replaceChildren(
-    text(`${count} 曲を選択中`),
-    button("ごみ箱へ…", () => { confirmingSongs = true; renderSongsBar(); }),
-    button("選択を解除", () => {
+    text(t("{n} 曲を選択中", { n: count })),
+    button(t("ごみ箱へ…"), () => { confirmingSongs = true; renderSongsBar(); }),
+    button(t("選択を解除"), () => {
       selectedSongs.clear();
       confirmingSongs = false;
       for (const box of songChecks.values()) { box.checked = false; box.closest(".song")?.classList.remove("selected"); }
@@ -379,8 +382,8 @@ async function trashSelectedSongs() {
   // The server names a moved song by its file stem; drop every selected path that ends in one.
   for (const stem of answer.moved) for (const base of [...selectedSongs]) if (base === stem || base.endsWith(`/${stem}`)) selectedSongs.delete(base);
   confirmingSongs = false;
-  if (answer.moved.length) toast(`${answer.moved.length} 曲をゴミ箱へ移動しました(左端のゴミ箱から戻せます)`, { key: "song-trash" });
-  if (answer.failed.length) toast(`移動できませんでした: ${answer.failed.map((f) => `${f.name}(${f.error})`).join("、")}`, { key: "song-trash-failed", kind: "error" });
+  if (answer.moved.length) toast(t("{n} 曲をゴミ箱へ移動しました(左端のゴミ箱から戻せます)", { n: answer.moved.length }), { key: "song-trash" });
+  if (answer.failed.length) toast(t("移動できませんでした: {list}", { list: answer.failed.map((f) => `${f.name}(${f.error})`).join(t("、")) }), { key: "song-trash-failed", kind: "error" });
   if (viewing === target) { songsKey = null; await refreshSongs(); }
 }
 
@@ -388,9 +391,9 @@ async function addSongs(files) {
   const target = viewing;
   if (!target) return;
   await uploadFiles({
-    files, unit: "曲", maxFiles: MAX_SONG_FILES, maxBytes: MAX_SONG_BYTES, toastKey: "song",
+    files, unit: t("曲"), maxFiles: MAX_SONG_FILES, maxBytes: MAX_SONG_BYTES, toastKey: "song",
     urlFor: (name) => `/api/songs/upload?pj=${encodeURIComponent(target)}&name=${encodeURIComponent(name)}`,
-    onProgress: (remaining) => { songsProgress.textContent = remaining ? `追加中… 残り ${remaining} 曲` : ""; },
+    onProgress: (remaining) => { songsProgress.textContent = remaining ? t("追加中… 残り {n} 曲", { n: remaining }) : ""; },
   });
   if (viewing === target) { songsKey = null; await refreshSongs(); }
 }
@@ -405,8 +408,8 @@ function songCard(song) {
   const pick = document.createElement("input");
   pick.type = "checkbox";
   pick.className = "song-pick";
-  pick.title = "選択(Shift で範囲選択)";
-  pick.setAttribute("aria-label", `${song.title} を選択`);
+  pick.title = t("選択(Shift で範囲選択)");
+  pick.setAttribute("aria-label", t("{name} を選択", { name: song.title }));
   pick.checked = selectedSongs.has(song.base);
   el.classList.toggle("selected", pick.checked);
   songChecks.set(song.base, pick);
@@ -416,12 +419,12 @@ function songCard(song) {
   const idBadge = document.createElement("span");
   idBadge.className = "img-id inline";
   idBadge.textContent = `#${song.id}`;
-  idBadge.title = `Claude には「曲${song.id}」または「#${song.id}」で指示できます`;
+  idBadge.title = t("Claude には「曲{id}」または「#{id}」で指示できます", { id: song.id });
   head.append(pick, idBadge, title);
   if (!song.path) {
     const badge = document.createElement("span");
     badge.className = "badge";
-    badge.textContent = "試聴(未ダウンロード)";
+    badge.textContent = t("試聴(未ダウンロード)");
     head.append(badge);
   }
   if (!song.path && song.name) head.append(downloadButton(song));
@@ -430,7 +433,7 @@ function songCard(song) {
   if (song.detail.duration) {
     const dur = document.createElement("span");
     dur.className = "meta dur";
-    dur.textContent = `${Math.round(song.detail.duration)}秒`;
+    dur.textContent = t("{n}秒", { n: Math.round(song.detail.duration) });
     head.append(dur);
   }
   el.append(head, songTools.line(song), player(song));
@@ -446,19 +449,19 @@ function downloadButton(song) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "dl";
-  button.textContent = "⬇ ダウンロードを頼む";
-  button.title = "この曲の mp3 を、Claude に取得して保存してもらいます(ダウンロード枠を使うことがあります)";
+  button.textContent = t("⬇ ダウンロードを頼む");
+  button.title = t("この曲の mp3 を、Claude に取得して保存してもらいます(ダウンロード枠を使うことがあります)");
   button.addEventListener("click", async () => {
     if (!claudeReady) {
-      return toast("Claude Code が見つかりません。左端の ⚙ 設定に導入方法があります。", { key: "dl", kind: "error" });
+      return toast(t("Claude Code が見つかりません。左端の ⚙ 設定に導入方法があります。"), { key: "dl", kind: "error" });
     }
     const name = song.name;
-    const text = `【ダウンロード】曲「${name}」(Output/song/${name}.suno.json)を Suno から mp3 でダウンロードして、Output/song/${name}.mp3 に保存してください。ダウンロード枠を使う場合は、実行する前に、私に確認してください。`;
+    const text = t("【ダウンロード】曲「{name}」(Output/song/{name}.suno.json)を Suno から mp3 でダウンロードして、Output/song/{name}.mp3 に保存してください。ダウンロード枠を使う場合は、実行する前に、私に確認してください。", { name });
     try {
       await typeToTerminal(text);
-      toast("ターミナルにダウンロードの依頼を入力しました。内容を確認して、左の Enter キーで送信してください。", { key: "dl" });
+      toast(t("ターミナルにダウンロードの依頼を入力しました。内容を確認して、左の Enter キーで送信してください。"), { key: "dl" });
     } catch (err) {
-      toast(`ターミナルに入力できませんでした: ${err.message}`, { key: "dl", kind: "error" });
+      toast(t("ターミナルに入力できませんでした: {error}", { error: err.message }), { key: "dl", kind: "error" });
     }
   });
   return button;
@@ -470,20 +473,20 @@ function analyzeButton(song) {
   button.type = "button";
   button.className = "dl";
   const done = song.analysis && !song.analysis.error && song.timings && !song.timings.error;
-  button.textContent = done ? "🔁 解析をやり直す" : "🎼 解析を頼む";
-  button.title = "ビート・キー・セクションと、歌詞の単語ごとのタイミングを Claude に取得して保存してもらいます(生成枠は使いません)";
+  button.textContent = done ? t("🔁 解析をやり直す") : t("🎼 解析を頼む");
+  button.title = t("ビート・キー・セクションと、歌詞の単語ごとのタイミングを Claude に取得して保存してもらいます(生成枠は使いません)");
   button.addEventListener("click", async () => {
     if (!claudeReady) {
-      return toast("Claude Code が見つかりません。左端の ⚙ 設定に導入方法があります。", { key: "an", kind: "error" });
+      return toast(t("Claude Code が見つかりません。左端の ⚙ 設定に導入方法があります。"), { key: "an", kind: "error" });
     }
     // Downloaded songs are named by their file; a preview-only song by its .suno.json.
     const name = song.name ?? song.title;
-    const text = `【解析】曲「${name}」(Output/song/${name}.suno.json)をビート解析と歌詞タイミングの取得で解析して、Output/song/${name}.analysis.json と Output/song/${name}.lyrics.json に保存してください。`;
+    const text = t("【解析】曲「{name}」(Output/song/{name}.suno.json)をビート解析と歌詞タイミングの取得で解析して、Output/song/{name}.analysis.json と Output/song/{name}.lyrics.json に保存してください。", { name });
     try {
       await typeToTerminal(text);
-      toast("ターミナルに解析の依頼を入力しました。内容を確認して、左の Enter キーで送信してください。", { key: "an" });
+      toast(t("ターミナルに解析の依頼を入力しました。内容を確認して、左の Enter キーで送信してください。"), { key: "an" });
     } catch (err) {
-      toast(`ターミナルに入力できませんでした: ${err.message}`, { key: "an", kind: "error" });
+      toast(t("ターミナルに入力できませんでした: {error}", { error: err.message }), { key: "an", kind: "error" });
     }
   });
   return button;
@@ -493,19 +496,19 @@ function analyzeButton(song) {
 function analysisText(song) {
   const parts = [];
   const a = song.analysis;
-  if (a?.error) parts.push(`ビート解析ファイルを読めません: ${a.error}`);
+  if (a?.error) parts.push(t("ビート解析ファイルを読めません: {error}", { error: a.error }));
   else if (a) {
     parts.push([
       a.bpm !== null && `BPM ${a.bpm}`,
       a.key,
-      a.timeSignature !== null && `${a.timeSignature}拍子`,
-      `${a.sections}セクション`,
-      `${a.beats}拍`,
+      a.timeSignature !== null && t("{n}拍子", { n: a.timeSignature }),
+      t("{n}セクション", { n: a.sections }),
+      t("{n}拍", { n: a.beats }),
     ].filter(Boolean).join(" · "));
   }
-  const t = song.timings;
-  if (t?.error) parts.push(`歌詞タイミングを読めません: ${t.error}`);
-  else if (t) parts.push(`歌詞タイミング ${t.words}語`);
+  const timings = song.timings;
+  if (timings?.error) parts.push(t("歌詞タイミングを読めません: {error}", { error: timings.error }));
+  else if (timings) parts.push(t("歌詞タイミング {n}語", { n: timings.words }));
   return parts.length ? parts.join(" / ") : null;
 }
 
@@ -529,30 +532,30 @@ function player(song) {
 /** Collapsed "詳細": style, what was requested, creation time, lyrics, link to Suno. Null when there is nothing to show. */
 function detailsPanel(song) {
   const d = song.detail;
-  const created = d.createdAt ? new Date(d.createdAt).toLocaleString("ja-JP") : null;
+  const created = d.createdAt ? new Date(d.createdAt).toLocaleString(locale) : null;
   const rows = [
-    ["スタイル", d.style],
-    ["作成", [created, d.kind].filter(Boolean).join(" · ") || null],
-    ["解析", analysisText(song)],
-    ["ビート(このアプリで解析)", songTools.beatsText(song)],
+    [t("スタイル"), d.style],
+    [t("作成"), [created, d.kind].filter(Boolean).join(" · ") || null],
+    [t("解析"), analysisText(song)],
+    [t("ビート(このアプリで解析)"), songTools.beatsText(song)],
   ].filter(([, value]) => value);
   if (!rows.length && !d.settings.length && !d.lyrics && !song.sunoId) return null;
 
   const box = document.createElement("details");
   box.className = "detail";
   const summary = document.createElement("summary");
-  summary.textContent = "詳細";
+  summary.textContent = t("詳細");
   const list = document.createElement("dl");
   for (const [label, value] of rows) list.append(...defRow(label, value));
   if (d.settings.length) {
     // Written by Claude at creation time; Suno cannot return these afterwards.
-    list.append(...defRow("生成時の指定", d.settings.map(([k, v]) => `${k}: ${v}`).join(" / ")));
+    list.append(...defRow(t("生成時の指定"), d.settings.map(([k, v]) => `${k}: ${v}`).join(" / ")));
   }
   box.append(summary, list);
   if (d.lyrics) {
     const label = document.createElement("div");
     label.className = "meta";
-    label.textContent = "歌詞";
+    label.textContent = t("歌詞");
     const pre = document.createElement("pre");
     pre.className = "lyrics";
     pre.textContent = d.lyrics;
@@ -563,7 +566,7 @@ function detailsPanel(song) {
     link.href = `https://suno.com/song/${song.sunoId}`;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    link.textContent = "Suno で開く ↗";
+    link.textContent = t("Suno で開く ↗");
     box.append(link);
   }
   return box;

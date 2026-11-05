@@ -1,8 +1,9 @@
 // "Lyrics / style / settings" tab: the user's draft on the left (editable), Claude's suggestion on the right
 // (read-only; only Claude writes that file). All text goes through textContent, never innerHTML.
 import { dismiss, toast } from "/toast.js";
+import { locale, t } from "/i18n.js";
 
-const DEFAULT_DRAFT = "案1";
+const DEFAULT_DRAFT = t("案1");
 const HISTORY_LIMIT = 200;
 const HISTORY_DEBOUNCE_MS = 500;
 
@@ -14,7 +15,7 @@ const h = (tag, props = {}, ...children) => {
 
 const jsonHeaders = { "content-type": "application/json" };
 const SUNO_UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
-const MODE_OPTIONS = [["new", "新規に作る"], ["cover", "カバー(Remix)"]];
+const MODE_OPTIONS = [["new", t("新規に作る")], ["cover", t("カバー(Remix)")]];
 function labelled(label, control) {
   return h("label", { className: "field" }, h("span", { className: "meta", textContent: label }), control);
 }
@@ -57,31 +58,31 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
 
   // ---- layout ----
   const fields = {
-    title: h("input", { maxLength: 200, placeholder: "曲名" }),
-    style: h("textarea", { rows: 3, maxLength: 2000, placeholder: "例: fast electro pop, female vocal, 170 BPM" }),
+    title: h("input", { maxLength: 200, placeholder: t("曲名") }),
+    style: h("textarea", { rows: 3, maxLength: 2000, placeholder: t("例: fast electro pop, female vocal, 170 BPM") }),
     lyrics: h("textarea", { className: "lyrics-input", maxLength: 20000, placeholder: "[Verse 1]\n…" }),
-    vocal: h("select", {}, ...[["", "指定なし"], ["female", "女性"], ["male", "男性"]].map(([v, t]) => new Option(t, v))),
+    vocal: h("select", {}, ...[["", t("指定なし")], ["female", t("女性")], ["male", t("男性")]].map(([v, label]) => new Option(label, v))),
     weirdness: h("input", { type: "number", min: 0, max: 1, step: 0.05 }),
     influence: h("input", { type: "number", min: 0, max: 1, step: 0.05 }),
     instrumental: h("input", { type: "checkbox" }),
     duration: h("input", { type: "number", min: 15, max: 360, step: 1 }),
-    mode: h("select", {}, ...MODE_OPTIONS.map(([v, t]) => new Option(t, v))),
+    mode: h("select", {}, ...MODE_OPTIONS.map(([v, label]) => new Option(label, v))),
     source: h("select", {}),
-    sourceManual: h("input", { placeholder: "一覧にない曲: Suno の曲の URL か ID", autocomplete: "off" }),
+    sourceManual: h("input", { placeholder: t("一覧にない曲: Suno の曲の URL か ID"), autocomplete: "off" }),
     voice: h("select", {}),
     audioInfluence: h("input", { type: "number", min: 0, max: 1, step: 0.05 }),
-    negativeStyle: h("input", { maxLength: 1000, placeholder: "例: polka, accordion" }),
+    negativeStyle: h("input", { maxLength: 1000, placeholder: t("例: polka, accordion") }),
   };
-  const voiceRefreshBtn = h("button", { type: "button", textContent: "Voice 一覧を取得", title: "Claude が Suno から自分の Voice 一覧を取って保存します(生成枠は使いません)" });
-  const sourceRow = h("div", { className: "mode-block" }, labelled("元の曲(カバーするもの)", fields.source), fields.sourceManual,
-    labelled("元の音への近さ (0-1)", fields.audioInfluence));
-  const voiceRow = h("div", { className: "mode-block" }, labelled("Voice(この声で歌わせる)", fields.voice), voiceRefreshBtn);
-  const undoBtn = h("button", { type: "button", textContent: "↶ 元に戻す", title: "Ctrl+Z" });
-  const redoBtn = h("button", { type: "button", textContent: "↷ やり直す", title: "Ctrl+Shift+Z / Ctrl+Y" });
-  const saveBtn = h("button", { type: "button", className: "primary", textContent: "保存" });
-  const askBtn = h("button", { type: "button", textContent: "Claude に確認を頼む", title: "歌詞などを完成させて右に出します。Suno にはまだ投げません" });
-  const autoBtn = h("button", { type: "button", textContent: "完成させて生成まで任せる", title: "Claude が完成させ、その内容で Suno に生成を依頼します" });
-  const genBtn = h("button", { type: "button", textContent: "この案で生成", title: "左の案をそのまま Suno に投げます" });
+  const voiceRefreshBtn = h("button", { type: "button", textContent: t("Voice 一覧を取得"), title: t("Claude が Suno から自分の Voice 一覧を取って保存します(生成枠は使いません)") });
+  const sourceRow = h("div", { className: "mode-block" }, labelled(t("元の曲(カバーするもの)"), fields.source), fields.sourceManual,
+    labelled(t("元の音への近さ (0-1)"), fields.audioInfluence));
+  const voiceRow = h("div", { className: "mode-block" }, labelled(t("Voice(この声で歌わせる)"), fields.voice), voiceRefreshBtn);
+  const undoBtn = h("button", { type: "button", textContent: t("↶ 元に戻す"), title: "Ctrl+Z" });
+  const redoBtn = h("button", { type: "button", textContent: t("↷ やり直す"), title: "Ctrl+Shift+Z / Ctrl+Y" });
+  const saveBtn = h("button", { type: "button", className: "primary", textContent: t("保存") });
+  const askBtn = h("button", { type: "button", textContent: t("Claude に確認を頼む"), title: t("歌詞などを完成させて右に出します。Suno にはまだ投げません") });
+  const autoBtn = h("button", { type: "button", textContent: t("完成させて生成まで任せる"), title: t("Claude が完成させ、その内容で Suno に生成を依頼します") });
+  const genBtn = h("button", { type: "button", textContent: t("この案で生成"), title: t("左の案をそのまま Suno に投げます") });
   const askButtons = [askBtn, autoBtn, genBtn];
   const askTitles = new Map(askButtons.map((button) => [button, button.title]));
   const status = h("span", { className: "meta" });
@@ -89,21 +90,21 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
   const claudeBox = h("section", { className: "col claude" });
   const field = (label, control) => h("label", { className: "field" }, h("span", { className: "meta", textContent: label }), control);
   // Rarely changed options live in a collapsed block; its summary line shows what is set so nothing hides silently.
-  const advancedSummary = h("summary", { textContent: "詳細設定" });
+  const advancedSummary = h("summary", { textContent: t("詳細設定") });
   const advanced = h("details", { className: "advanced" }, advancedSummary,
-    field("作り方", fields.mode), sourceRow, voiceRow, field("避けたいスタイル", fields.negativeStyle));
+    field(t("作り方"), fields.mode), sourceRow, voiceRow, field(t("避けたいスタイル"), fields.negativeStyle));
   const humanBox = h("section", { className: "col human" },
-    h("h3", { textContent: "人の案(あなたが編集)" }),
-    field("曲名", fields.title),
-    field("スタイル", fields.style),
-    h("div", { className: "lyrics-head" }, h("span", { className: "meta", textContent: "歌詞" }), undoBtn, redoBtn),
+    h("h3", { textContent: t("人の案(あなたが編集)") }),
+    field(t("曲名"), fields.title),
+    field(t("スタイル"), fields.style),
+    h("div", { className: "lyrics-head" }, h("span", { className: "meta", textContent: t("歌詞") }), undoBtn, redoBtn),
     fields.lyrics,
     h("div", { className: "settings" },
-      field("ボーカル", fields.vocal),
+      field(t("ボーカル"), fields.vocal),
       field("weirdness (0-1)", fields.weirdness),
       field("style influence (0-1)", fields.influence),
-      field("長さ(秒)", fields.duration),
-      h("label", { className: "field check" }, fields.instrumental, h("span", { textContent: "インスト(歌なし)" })),
+      field(t("長さ(秒)"), fields.duration),
+      h("label", { className: "field check" }, fields.instrumental, h("span", { textContent: t("インスト(歌なし)") })),
     ),
     advanced,
     h("div", { className: "save-row" }, saveBtn, status),
@@ -161,19 +162,19 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
   }
 
   function renderChoices(sourceId = fields.source.value, voiceId = fields.voice.value, voiceName = "") {
-    fillSelect(fields.source, "(選んでください)", songs.map((song) => ({ value: song.sunoId, text: song.title })), sourceId, "(この PJ の一覧にない曲)");
-    fillSelect(fields.voice, "指定なし", voices.voices.map((v) => ({ value: v.id, text: v.name })), voiceId, voiceName || `${voiceId.slice(0, 8)}…(一覧にない)`);
+    fillSelect(fields.source, t("(選んでください)"), songs.map((song) => ({ value: song.sunoId, text: song.title })), sourceId, t("(この PJ の一覧にない曲)"));
+    fillSelect(fields.voice, t("指定なし"), voices.voices.map((v) => ({ value: v.id, text: v.name })), voiceId, voiceName || t("{id}…(一覧にない)", { id: voiceId.slice(0, 8) }));
   }
 
   function syncModeUi() {
     sourceRow.hidden = fields.mode.value !== "cover";
     const set = [
-      fields.mode.value === "cover" && (sourceIdFromForm() ? "カバー" : "カバー(元の曲が未選択)"),
+      fields.mode.value === "cover" && (sourceIdFromForm() ? t("カバー") : t("カバー(元の曲が未選択)")),
       fields.voice.value && `Voice: ${fields.voice.selectedOptions[0]?.dataset.name ?? ""}`,
-      fields.negativeStyle.value && "避けたいスタイル",
+      fields.negativeStyle.value && t("避けたいスタイル"),
     ].filter(Boolean);
-    advancedSummary.textContent = set.length ? `詳細設定(${set.join(" / ")})` : "詳細設定";
-    voiceRefreshBtn.textContent = voices.fetched ? "Voice 一覧を更新" : "Voice 一覧を取得";
+    advancedSummary.textContent = set.length ? t("詳細設定({list})", { list: set.join(" / ") }) : t("詳細設定");
+    voiceRefreshBtn.textContent = voices.fetched ? t("Voice 一覧を更新") : t("Voice 一覧を取得");
   }
 
   function writeForm(draft) {
@@ -211,10 +212,10 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
     const claudeReady = isClaudeReady();
     for (const button of askButtons) {
       button.disabled = !askable || !claudeReady;
-      button.title = claudeReady ? askTitles.get(button) : "Claude Code が見つかりません。左端の ⚙ 設定に導入方法があります";
+      button.title = claudeReady ? askTitles.get(button) : t("Claude Code が見つかりません。左端の ⚙ 設定に導入方法があります");
     }
-    if (enabled && isDirty()) status.textContent = "未保存の変更があります";
-    else if (enabled && needsSource) status.textContent = "カバーには元の曲が必要です";
+    if (enabled && isDirty()) status.textContent = t("未保存の変更があります");
+    else if (enabled && needsSource) status.textContent = t("カバーには元の曲が必要です");
   }
 
   /** Load the human file's content into the form (used on selection and on outside changes). */
@@ -248,8 +249,8 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
       textContent: name,
       onclick: () => select(name),
     }));
-    const input = h("input", { placeholder: "新しい案の名前", maxLength: 64, autocomplete: "off" });
-    const form = h("form", { className: "new-draft" }, input, h("button", { textContent: "+ 新しい案" }));
+    const input = h("input", { placeholder: t("新しい案の名前"), maxLength: 64, autocomplete: "off" });
+    const form = h("form", { className: "new-draft" }, input, h("button", { textContent: t("+ 新しい案") }));
     form.addEventListener("submit", (event) => { event.preventDefault(); create(input.value.trim()); });
     bar.replaceChildren(...pills, form);
   }
@@ -263,7 +264,7 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
       writeForm(blankDraft());
       baseMtime = side?.mtime ?? null;
       savedJson = "";
-      showMessage(side?.error ? `この案のファイルを読み込めませんでした: ${side.error}` : "", null, "error");
+      showMessage(side?.error ? t("この案のファイルを読み込めませんでした: {error}", { error: side.error }) : "", null, "error");
       updateUi();
     }
     // A different draft starts a fresh history (load() above would otherwise carry the old draft's text over).
@@ -298,12 +299,12 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
     });
     const body = await res.json();
     if (res.status === 409) {
-      return showMessage(`${body.error} 保存しませんでした。`, { label: "読み込み直す", run: reloadFromFile });
+      return showMessage(t("{error} 保存しませんでした。", { error: body.error }), { label: t("読み込み直す"), run: reloadFromFile });
     }
     if (!res.ok) return showMessage(body.error, null, "error");
     baseMtime = body.mtime;
     savedJson = JSON.stringify(readForm());
-    status.textContent = `保存しました ${new Date().toLocaleTimeString("ja-JP")}`;
+    status.textContent = t("保存しました {time}", { time: new Date().toLocaleTimeString(locale) });
     showMessage("");
     updateUi();
     await refresh();
@@ -315,19 +316,19 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
 
 // ---- requests to Claude: one typed line each, tagged so the app's rules know which procedure to follow ----
   const requestTexts = {
-    ask: (n) => `【確認】下書き「${n}」(Drafts/${n}.human.json)を読んで、歌詞・スタイル・設定を完成させ、修正案を Drafts/${n}.claude.json に書いてください。Suno にはまだ投げないでください。`,
-    auto: (n) => `【完成して生成】下書き「${n}」(Drafts/${n}.human.json)を読んで、歌詞・スタイル・設定を完成させて Drafts/${n}.claude.json に書き、その内容で Suno に生成を依頼してください。`,
-    generate: (n) => `【この案で生成】下書き「${n}」(Drafts/${n}.human.json)の内容をそのまま使って、Suno に生成を依頼してください。`,
+    ask: (n) => t("【確認】下書き「{n}」(Drafts/{n}.human.json)を読んで、歌詞・スタイル・設定を完成させ、修正案を Drafts/{n}.claude.json に書いてください。Suno にはまだ投げないでください。", { n }),
+    auto: (n) => t("【完成して生成】下書き「{n}」(Drafts/{n}.human.json)を読んで、歌詞・スタイル・設定を完成させて Drafts/{n}.claude.json に書き、その内容で Suno に生成を依頼してください。", { n }),
+    generate: (n) => t("【この案で生成】下書き「{n}」(Drafts/{n}.human.json)の内容をそのまま使って、Suno に生成を依頼してください。", { n }),
   };
 
-  const voiceRequest = "【Voice更新】Suno の自分の Voice 一覧(voices-list)を取得して、Drafts/voices.json に保存してください。生成はしないでください。";
+  const voiceRequest = t("【Voice更新】Suno の自分の Voice 一覧(voices-list)を取得して、Drafts/voices.json に保存してください。生成はしないでください。");
 
   async function ask(kind) {
     try {
       await typeToTerminal(kind === "voices" ? voiceRequest : requestTexts[kind](current));
-      showMessage("ターミナルに依頼を入力しました。内容を確認して、左の Enter キーで送信してください。");
+      showMessage(t("ターミナルに依頼を入力しました。内容を確認して、左の Enter キーで送信してください。"));
     } catch (err) {
-      showMessage(`ターミナルに入力できませんでした: ${err.message}`, null, "error");
+      showMessage(t("ターミナルに入力できませんでした: {error}", { error: err.message }), null, "error");
     }
   }
 
@@ -339,36 +340,36 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
     const key = side ? `${side.mtime}:${item.human?.mtime}` : "none";
     if (key === claudeKey) return;
     claudeKey = key;
-    const title = h("h3", { textContent: "Claude の修正案(読み取り専用)" });
-    if (!current) return claudeBox.replaceChildren(title, h("p", { className: "empty", textContent: "左で案を選ぶか、新しく作ってください。" }));
+    const title = h("h3", { textContent: t("Claude の修正案(読み取り専用)") });
+    if (!current) return claudeBox.replaceChildren(title, h("p", { className: "empty", textContent: t("左で案を選ぶか、新しく作ってください。") }));
     if (!side) {
       return claudeBox.replaceChildren(title, h("p", { className: "empty" },
-        "まだありません。左の案を保存して「Claude に確認を頼む」を押すと、Claude が歌詞などを完成させて、ここに出します。"));
+        t("まだありません。左の案を保存して「Claude に確認を頼む」を押すと、Claude が歌詞などを完成させて、ここに出します。")));
     }
     if (side.error) {
-      return claudeBox.replaceChildren(title, h("p", { className: "warn", textContent: `読み込めませんでした(ファイルは変更していません): ${side.error}` }));
+      return claudeBox.replaceChildren(title, h("p", { className: "warn", textContent: t("読み込めませんでした(ファイルは変更していません): {error}", { error: side.error }) }));
     }
     const d = side.draft;
     const settings = [
-      d.settings.vocal_gender && `ボーカル: ${d.settings.vocal_gender}`,
+      d.settings.vocal_gender && t("ボーカル: {v}", { v: d.settings.vocal_gender }),
       d.settings.weirdness !== null && `weirdness: ${d.settings.weirdness}`,
       d.settings.style_influence !== null && `style influence: ${d.settings.style_influence}`,
-      d.settings.instrumental && "インスト",
-      d.settings.duration !== null && `長さ: ${d.settings.duration}秒`,
-      d.settings.mode === "cover" && `カバー元: ${d.settings.source_title || d.settings.source_id || "(未指定)"}`,
+      d.settings.instrumental && t("インスト"),
+      d.settings.duration !== null && t("長さ: {n}秒", { n: d.settings.duration }),
+      d.settings.mode === "cover" && t("カバー元: {v}", { v: d.settings.source_title || d.settings.source_id || t("(未指定)") }),
       d.settings.voice_id && `Voice: ${d.settings.voice_name || d.settings.voice_id}`,
       d.settings.audio_influence !== null && `audio influence: ${d.settings.audio_influence}`,
-      d.settings.negative_style && `避けたいスタイル: ${d.settings.negative_style}`,
+      d.settings.negative_style && t("避けたいスタイル: {v}", { v: d.settings.negative_style }),
     ].filter(Boolean).join(" / ");
     const block = (label, value, cls = "") => h("div", { className: "field" },
-      h("span", { className: "meta", textContent: label }), h("div", { className: `ro ${cls}`, textContent: value || "(なし)" }));
+      h("span", { className: "meta", textContent: label }), h("div", { className: `ro ${cls}`, textContent: value || t("(なし)") }));
     const outdated = item.human && item.human.mtime > side.mtime;
-    const takeBtn = h("button", { type: "button", className: "primary", textContent: "この案を左に取り込む", onclick: () => takeClaudesDraft(d) });
+    const takeBtn = h("button", { type: "button", className: "primary", textContent: t("この案を左に取り込む"), onclick: () => takeClaudesDraft(d) });
     claudeBox.replaceChildren(
       title,
-      h("div", { className: "meta" }, outdated ? "あなたの案が、この修正案のあとに更新されています(古い案をもとにしています)" : "最新のあなたの案をもとにした修正案です"),
+      h("div", { className: "meta" }, outdated ? t("あなたの案が、この修正案のあとに更新されています(古い案をもとにしています)") : t("最新のあなたの案をもとにした修正案です")),
       ...(d.note ? [h("div", { className: "note", textContent: d.note })] : []),
-      block("曲名", d.title), block("スタイル", d.style), block("歌詞", d.lyrics, "lyrics-ro"), block("設定", settings),
+      block(t("曲名"), d.title), block(t("スタイル"), d.style), block(t("歌詞"), d.lyrics, "lyrics-ro"), block(t("設定"), settings),
       h("div", { className: "save-row" }, takeBtn),
     );
   }
@@ -379,13 +380,13 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
       flushHistory();
       writeForm(claudeDraft);
       record(fields.lyrics.value); // the lyrics can be undone back to what was there
-      status.textContent = "Claude の案を取り込みました。保存すると、あなたの案になります";
+      status.textContent = t("Claude の案を取り込みました。保存すると、あなたの案になります");
       showMessage("");
       updateUi();
     };
     if (isDirty()) {
-      showMessage("未保存の変更があります。取り込むと上書きされます(歌詞は「元に戻す」で戻せます)。",
-        { label: "取り込む", run: apply });
+      showMessage(t("未保存の変更があります。取り込むと上書きされます(歌詞は「元に戻す」で戻せます)。"),
+        { label: t("取り込む"), run: apply });
     } else apply();
   }
 
@@ -431,10 +432,10 @@ export function createDraftsTab({ root, getProject, typeToTerminal, isClaudeRead
     if (item?.human && item.human.mtime !== baseMtime) {
       if (force || !isDirty()) {
         if (item.human.draft) load(item.human);
-        else showMessage(`この案のファイルを読み込めませんでした: ${item.human.error}`, null, "error");
+        else showMessage(t("この案のファイルを読み込めませんでした: {error}", { error: item.human.error }), null, "error");
       } else {
         stale = true;
-        showMessage("このファイルが、外で更新されました。保存すると上書きされるため、保存はできません。", { label: "読み込み直す(編集中の内容は消えます)", run: reloadFromFile });
+        showMessage(t("このファイルが、外で更新されました。保存すると上書きされるため、保存はできません。"), { label: t("読み込み直す(編集中の内容は消えます)"), run: reloadFromFile });
       }
     }
     renderClaude();

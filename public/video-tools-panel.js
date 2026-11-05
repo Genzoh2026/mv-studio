@@ -3,39 +3,40 @@
 // runs on the server (only the catalog's own checked commands), streams its log here and can be cancelled.
 // The list is one line per entry (name, state, a small button); the explanation opens only when a row is clicked.
 import { toast } from "/toast.js";
+import { t } from "/i18n.js";
 
 const POLL_MS = 1000;
 const SHOWN_LOG_LINES = 8;
 const STEP_ICON = { waiting: "○", running: "⏳", done: "✓", error: "✗", cancelled: "—", skipped: "−" };
-const KIND_LABELS = { skills: "スキル", plugin: "プラグイン", mcp: "MCP", connector: "コネクタ", builtin: "アプリ内蔵", system: "PC に導入" };
-const STATE_LABELS = { installed: "導入済み", partial: "一部のみ", "not-installed": "未導入", unknown: "不明", builtin: "内蔵", manual: "手動" };
-const COST_LABELS = { none: null, "account-required": "アカウントが必要", "paid-accounts": "料金がかかります" };
+const KIND_LABELS = { skills: t("スキル"), plugin: t("プラグイン"), mcp: "MCP", connector: t("コネクタ"), builtin: t("アプリ内蔵"), system: t("PC に導入") };
+const STATE_LABELS = { installed: t("導入済み"), partial: t("一部のみ"), "not-installed": t("未導入"), unknown: t("不明"), builtin: t("内蔵"), manual: t("手動") };
+const COST_LABELS = { none: null, "account-required": t("アカウントが必要"), "paid-accounts": t("料金がかかります") };
 const COMMAND_KINDS = new Set(["skills", "plugin", "mcp"]);
 const CATEGORY_FILTERS = [
-  ["all", "すべて"],
-  ["render", "描画"],
+  ["all", t("すべて")],
+  ["render", t("描画")],
   ["music-video", "MV"],
-  ["animation", "アニメ"],
-  ["generation", "生成"],
-  ["captions", "字幕"],
-  ["editing", "編集"],
-  ["audio", "音声"],
+  ["animation", t("アニメ")],
+  ["generation", t("生成")],
+  ["captions", t("字幕")],
+  ["editing", t("編集")],
+  ["audio", t("音声")],
 ];
 const STATE_FILTERS = [
-  ["all", "すべて"],
-  ["installed", "導入済み"],
-  ["not-installed", "未導入"],
+  ["all", t("すべて")],
+  ["installed", t("導入済み")],
+  ["not-installed", t("未導入")],
 ];
 // What to do after an install so that a Claude that is already running notices it.
 const AFTER_INSTALL = {
-  skills: "動いている Claude には、まもなく自動で反映されます。されないときは、その Claude で /reload-skills と入力してください。",
-  plugin: "動いている Claude に反映するには、その Claude で /reload-plugins と入力するか、開き直してください。",
-  mcp: "プロジェクトの Claude を終了して開き直してください(最初に使うとき、承認が求められます)。",
+  skills: t("動いている Claude には、まもなく自動で反映されます。されないときは、その Claude で /reload-skills と入力してください。"),
+  plugin: t("動いている Claude に反映するには、その Claude で /reload-plugins と入力するか、開き直してください。"),
+  mcp: t("プロジェクトの Claude を終了して開き直してください(最初に使うとき、承認が求められます)。"),
 };
 const GROUPS = [
-  ["おすすめ", (e) => e.status === "recommended" && COMMAND_KINDS.has(e.kind)],
-  ["そのほか", (e) => e.status !== "recommended" && COMMAND_KINDS.has(e.kind)],
-  ["アプリ内蔵・手動で設定", (e) => !COMMAND_KINDS.has(e.kind)],
+  [t("おすすめ"), (e) => e.status === "recommended" && COMMAND_KINDS.has(e.kind)],
+  [t("そのほか"), (e) => e.status !== "recommended" && COMMAND_KINDS.has(e.kind)],
+  [t("アプリ内蔵・手動で設定"), (e) => !COMMAND_KINDS.has(e.kind)],
 ];
 
 const h = (tag, props = {}, ...children) => {
@@ -72,13 +73,13 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
   const searchInput = h("input", {
     type: "search",
     className: "vt-search",
-    placeholder: "名前・説明で絞り込み",
-    ariaLabel: "名前・説明で絞り込み",
+    placeholder: t("名前・説明で絞り込み"),
+    ariaLabel: t("名前・説明で絞り込み"),
     oninput: () => { query = searchInput.value; renderList(); },
   });
   const catButtons = new Map();
   const stateButtons = new Map();
-  const catRow = h("div", { className: "chips vt-chips", role: "group", ariaLabel: "用途で絞り込み" },
+  const catRow = h("div", { className: "chips vt-chips", role: "group", ariaLabel: t("用途で絞り込み") },
     ...CATEGORY_FILTERS.map(([id, label]) => {
       const btn = h("button", {
         type: "button",
@@ -90,7 +91,7 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
       return btn;
     }),
   );
-  const stateRow = h("div", { className: "chips vt-chips", role: "group", ariaLabel: "状態で絞り込み" },
+  const stateRow = h("div", { className: "chips vt-chips", role: "group", ariaLabel: t("状態で絞り込み") },
     ...STATE_FILTERS.map(([id, label]) => {
       const btn = h("button", {
         type: "button",
@@ -135,18 +136,18 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     }, POLL_MS);
   }
 
-  const entryName = (id) => (id ? shortName(catalog?.entries.find((e) => e.id === id)?.name ?? id) : `${install?.count ?? 0} 個のツール`);
+  const entryName = (id) => (id ? shortName(catalog?.entries.find((e) => e.id === id)?.name ?? id) : t("{n} 個のツール", { n: install?.count ?? 0 }));
 
   function announce() {
-    if (install.state === "done") toast(`${entryName(install.entryId)} を導入しました`, { key: "video-tools" });
-    else if (install.state === "error") toast(`${entryName(install.entryId)} の導入に失敗しました。ログを確認してください`, { key: "video-tools", kind: "error" });
+    if (install.state === "done") toast(t("{name} を導入しました", { name: entryName(install.entryId) }), { key: "video-tools" });
+    else if (install.state === "error") toast(t("{name} の導入に失敗しました。ログを確認してください", { name: entryName(install.entryId) }), { key: "video-tools", kind: "error" });
   }
 
   async function openConfirm(id, scope) {
     confirming = { id, scope, plan: null };
     render();
     const plan = await get(`/api/video-tools/plan?id=${encodeURIComponent(id)}&scope=${scope}&pj=${encodeURIComponent(pj)}`).catch(() => null);
-    if (confirming?.id === id && confirming.scope === scope) confirming.plan = plan ?? { ok: false, reason: "確認できませんでした", steps: [] };
+    if (confirming?.id === id && confirming.scope === scope) confirming.plan = plan ?? { ok: false, reason: t("確認できませんでした"), steps: [] };
     render();
   }
 
@@ -162,22 +163,22 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
   }
 
   const button = (textContent, onclick, className = "", title = "") => h("button", { type: "button", textContent, onclick, className, title });
-  const copyButton = (text) => button("コピー", async () => { await navigator.clipboard.writeText(text); toast("コピーしました", { key: "copied" }); });
+  const copyButton = (text) => button(t("コピー"), async () => { await navigator.clipboard.writeText(text); toast(t("コピーしました"), { key: "copied" }); });
   const list = (items) => h("ul", { className: "vt-list" }, ...items.map((text) => h("li", { textContent: text })));
 
   /** What the row says in small print: who made it, what kind, and the warnings that matter before pressing the button. */
   function metaLine(entry) {
-    const parts = [entry.maker === "official" ? "公式" : "コミュニティ製", KIND_LABELS[entry.kind], COST_LABELS[entry.costs], entry.signin ? "サインイン" : null].filter(Boolean);
+    const parts = [entry.maker === "official" ? t("公式") : t("コミュニティ製"), KIND_LABELS[entry.kind], COST_LABELS[entry.costs], entry.signin ? t("サインイン") : null].filter(Boolean);
     return parts.join(" · ");
   }
 
   function details(entry) {
     const parts = [h("p", { textContent: entry.summary_ja }), h("p", { className: "sec-note", textContent: entry.use_when_ja })];
-    if (entry.requires?.length) parts.push(h("p", { className: "sec-note", textContent: "必要なもの" }), list(entry.requires));
-    if (entry.notes_ja?.length) parts.push(h("p", { className: "sec-note", textContent: "注意" }), list(entry.notes_ja));
-    parts.push(h("p", { className: "sec-note" }, `ライセンス ${entry.license} · 確認日 ${entry.verified} · `, h("a", { href: entry.source, target: "_blank", rel: "noopener noreferrer", textContent: "配布元 ↗" })));
+    if (entry.requires?.length) parts.push(h("p", { className: "sec-note", textContent: t("必要なもの") }), list(entry.requires));
+    if (entry.notes_ja?.length) parts.push(h("p", { className: "sec-note", textContent: t("注意") }), list(entry.notes_ja));
+    parts.push(h("p", { className: "sec-note" }, t("ライセンス {license} · 確認日 {date} · ", { license: entry.license, date: entry.verified }), h("a", { href: entry.source, target: "_blank", rel: "noopener noreferrer", textContent: t("配布元 ↗") })));
     if (entry.manual_steps_ja) {
-      parts.push(h("p", { className: "sec-note", textContent: "手順(自分で行います)" }), ...entry.manual_steps_ja.map((step) => {
+      parts.push(h("p", { className: "sec-note", textContent: t("手順(自分で行います)") }), ...entry.manual_steps_ja.map((step) => {
         const command = /(winget|brew|sudo) /.test(step) ? step.replace(/^[A-Za-z ]+: /, "") : null;
         return command ? h("div", { className: "cmd" }, h("pre", { textContent: command }), copyButton(command)) : h("p", { className: "sec-note", textContent: step });
       }));
@@ -188,10 +189,10 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
         Object.assign(h("input", { type: "checkbox" }), { checked: on, onchange: async (ev) => {
           const res = await post("/api/video-tools/auto", { id: entry.id, enabled: ev.target.checked });
           if (res.ok) catalog = { ...catalog, auto: (await res.json()).auto };
-          else toast("切り替えに失敗しました", { key: "video-tools", kind: "error" });
+          else toast(t("切り替えに失敗しました"), { key: "video-tools", kind: "error" });
           render(true);
         } }),
-        " 新しく作るプロジェクトに自動で入れる"));
+        t(" 新しく作るプロジェクトに自動で入れる")));
     }
     return h("div", { className: "vt-more" }, ...parts);
   }
@@ -207,7 +208,7 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     return h("div", { className: `vt-row${expanded ? " open" : ""}` },
       h("div", { className: "vt-line" },
         toggle,
-        COMMAND_KINDS.has(entry.kind) ? (canInstall ? button(state === "partial" ? "続き" : "導入", () => openConfirm(entry.id, "workspace"), "vt-install", "導入の内容を確認します") : stateText) : stateText),
+        COMMAND_KINDS.has(entry.kind) ? (canInstall ? button(state === "partial" ? t("続き") : t("導入"), () => openConfirm(entry.id, "workspace"), "vt-install", t("導入の内容を確認します")) : stateText) : stateText),
       ...(expanded ? [details(entry)] : []),
     );
   }
@@ -218,20 +219,20 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     const radio = (value, label) => h("label", {}, Object.assign(h("input", { type: "radio", name: "vt-scope" }), { checked: scope === value, onchange: () => openConfirm(entry.id, value) }), ` ${label}`);
     const cost = COST_LABELS[entry.costs];
     return h("div", { className: "vt-confirm" },
-      h("h4", { textContent: `${shortName(entry.name)} を導入しますか?` }),
-      h("p", { className: "sec-note", textContent: `${metaLine(entry)} · ライセンス ${entry.license}` }),
+      h("h4", { textContent: t("{name} を導入しますか?", { name: shortName(entry.name) }) }),
+      h("p", { className: "sec-note", textContent: t("{meta} · ライセンス {license}", { meta: metaLine(entry), license: entry.license }) }),
       h("div", { className: "vt-scope" },
-        radio("workspace", `このワークスペースのすべてのプロジェクト(今ある ${projects.length} 個と、これから作る新しいプロジェクト)`),
-        radio("project", `このプロジェクトだけ(${pj || "未選択"})`),
-        radio("user", "自分の Claude 全体(MV 以外の作業にも入ります)")),
-      ...(scope === "workspace" && plan?.ok ? [h("p", { className: "sec-note", textContent: `入れる先: ${plan.targets.length ? plan.targets.join("、") : "(まだプロジェクトはありません)"}。新しく作るプロジェクトにも自動で入ります(あとで各ツールの詳細から切り替えられます)。` })] : []),
-      ...(entry.requires?.length ? [h("p", { className: "sec-note", textContent: "必要なもの(入っていないと動きません)" }), list(entry.requires)] : []),
-      ...(cost || entry.signin ? [h("p", { className: "bad", textContent: [cost, entry.signin ? "初回にサインインします(あなたが行います)" : null].filter(Boolean).join("。") })] : []),
-      ...(entry.notes_ja?.length ? [h("p", { className: "sec-note", textContent: "注意" }), list(entry.notes_ja)] : []),
-      !plan ? h("p", { className: "sec-note", textContent: "確認中…" })
+        radio("workspace", t("このワークスペースのすべてのプロジェクト(今ある {n} 個と、これから作る新しいプロジェクト)", { n: projects.length })),
+        radio("project", t("このプロジェクトだけ({pj})", { pj: pj || t("未選択") })),
+        radio("user", t("自分の Claude 全体(MV 以外の作業にも入ります)"))),
+      ...(scope === "workspace" && plan?.ok ? [h("p", { className: "sec-note", textContent: t("入れる先: {targets}。新しく作るプロジェクトにも自動で入ります(あとで各ツールの詳細から切り替えられます)。", { targets: plan.targets.length ? plan.targets.join(t("、")) : t("(まだプロジェクトはありません)") }) })] : []),
+      ...(entry.requires?.length ? [h("p", { className: "sec-note", textContent: t("必要なもの(入っていないと動きません)") }), list(entry.requires)] : []),
+      ...(cost || entry.signin ? [h("p", { className: "bad", textContent: [cost, entry.signin ? t("初回にサインインします(あなたが行います)") : null].filter(Boolean).join("。") })] : []),
+      ...(entry.notes_ja?.length ? [h("p", { className: "sec-note", textContent: t("注意") }), list(entry.notes_ja)] : []),
+      !plan ? h("p", { className: "sec-note", textContent: t("確認中…") })
         : !plan.ok ? h("p", { className: "bad", textContent: plan.reason })
-          : h("div", {}, h("p", { className: "sec-note", textContent: "実行するコマンド(この内容だけです)" }), ...plan.steps.flatMap((step) => [h("pre", { className: "setup-cmd", textContent: step.display }), h("p", { className: "sec-note", textContent: `場所: ${step.cwd}` })])),
-      h("div", { className: "panel-actions" }, ...(plan?.ok ? [button("導入する", start, "danger")] : []), button("やめる", () => { confirming = null; render(); })),
+          : h("div", {}, h("p", { className: "sec-note", textContent: t("実行するコマンド(この内容だけです)") }), ...plan.steps.flatMap((step) => [h("pre", { className: "setup-cmd", textContent: step.display }), h("p", { className: "sec-note", textContent: t("場所: {cwd}", { cwd: step.cwd }) })])),
+      h("div", { className: "panel-actions" }, ...(plan?.ok ? [button(t("導入する"), start, "danger")] : []), button(t("やめる"), () => { confirming = null; render(); })),
     );
   }
 
@@ -243,11 +244,11 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
   async function refreshBulkPlan() {
     const mine = bulk;
     const ids = [...bulk.picked];
-    mine.plan = ids.length ? null : { ok: false, reason: "導入するツールを選んでください", steps: [] };
+    mine.plan = ids.length ? null : { ok: false, reason: t("導入するツールを選んでください"), steps: [] };
     render();
     if (!ids.length) return;
     const plan = await get(`/api/video-tools/plan?scope=workspace&ids=${ids.map(encodeURIComponent).join(",")}`).catch(() => null);
-    if (bulk === mine && [...mine.picked].join() === ids.join()) mine.plan = plan ?? { ok: false, reason: "確認できませんでした", steps: [] };
+    if (bulk === mine && [...mine.picked].join() === ids.join()) mine.plan = plan ?? { ok: false, reason: t("確認できませんでした"), steps: [] };
     render();
   }
 
@@ -269,21 +270,21 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
   function bulkView() {
     const { picked, plan } = bulk;
     const rows = bulkCandidates().map((entry) => {
-      const warn = [COST_LABELS[entry.costs], entry.signin ? "サインインあり" : null].filter(Boolean).join("・");
+      const warn = [COST_LABELS[entry.costs], entry.signin ? t("サインインあり") : null].filter(Boolean).join(t("・"));
       const box = Object.assign(h("input", { type: "checkbox" }), { checked: picked.has(entry.id), onchange: () => { if (box.checked) picked.add(entry.id); else picked.delete(entry.id); refreshBulkPlan(); } });
       return h("label", { className: "vt-bulk-row" }, box, ` ${shortName(entry.name)}`, ...(warn ? [h("span", { className: "bad", textContent: ` (${warn})` })] : []));
     });
     return h("div", { className: "vt-confirm" },
-      h("h4", { textContent: "未導入のツールをまとめて導入しますか?" }),
-      h("p", { className: "sec-note", textContent: `このワークスペースのすべてのプロジェクト(今ある ${projects.length} 個と、これから作る新しいプロジェクト)に入れます。有料・サインインが必要なものは、最初は選ばれていません。入れるほどセッションごとの読み込み量(トークン)が増えるので、使うものだけを選んでください。` }),
-      ...(rows.length ? rows : [h("p", { className: "sec-note", textContent: "未導入のツールはありません。" })]),
-      !plan ? h("p", { className: "sec-note", textContent: "確認中…" })
+      h("h4", { textContent: t("未導入のツールをまとめて導入しますか?") }),
+      h("p", { className: "sec-note", textContent: t("このワークスペースのすべてのプロジェクト(今ある {n} 個と、これから作る新しいプロジェクト)に入れます。有料・サインインが必要なものは、最初は選ばれていません。入れるほどセッションごとの読み込み量(トークン)が増えるので、使うものだけを選んでください。", { n: projects.length }) }),
+      ...(rows.length ? rows : [h("p", { className: "sec-note", textContent: t("未導入のツールはありません。") })]),
+      !plan ? h("p", { className: "sec-note", textContent: t("確認中…") })
         : !plan.ok ? h("p", { className: "bad", textContent: plan.reason })
-          : h("div", {}, h("p", { className: "sec-note", textContent: `入れる先: ${plan.targets.length ? plan.targets.join("、") : "(まだプロジェクトはありません)"}` }), h("p", { className: "sec-note", textContent: "実行するコマンド(この内容だけです。プロジェクトごとに1回ずつ実行します)" }), ...plan.steps.map((step) => h("pre", { className: "setup-cmd", textContent: step.display }))),
-      h("div", { className: "panel-actions" }, ...(plan?.ok ? [button(`導入する(${picked.size} 個)`, startBulk, "danger")] : []), button("やめる", () => { bulk = null; render(); })));
+          : h("div", {}, h("p", { className: "sec-note", textContent: t("入れる先: {targets}", { targets: plan.targets.length ? plan.targets.join(t("、")) : t("(まだプロジェクトはありません)") }) }), h("p", { className: "sec-note", textContent: t("実行するコマンド(この内容だけです。プロジェクトごとに1回ずつ実行します)") }), ...plan.steps.map((step) => h("pre", { className: "setup-cmd", textContent: step.display }))),
+      h("div", { className: "panel-actions" }, ...(plan?.ok ? [button(t("導入する({n} 個)", { n: picked.size }), startBulk, "danger")] : []), button(t("やめる"), () => { bulk = null; render(); })));
   }
 
-  const SCOPE_LABEL = (run) => (run.scope === "user" ? "(自分の Claude 全体)" : run.scope === "workspace" ? "(全プロジェクト)" : run.scope === "auto" ? `(新しいプロジェクト ${run.pj})` : `(${run.pj})`);
+  const SCOPE_LABEL = (run) => (run.scope === "user" ? t("(自分の Claude 全体)") : run.scope === "workspace" ? t("(全プロジェクト)") : run.scope === "auto" ? t("(新しいプロジェクト {pj})", { pj: run.pj }) : `(${run.pj})`);
 
   /** Few steps are listed one by one; many (a whole workspace) as a count plus the step that is running now. */
   function stepLines(steps) {
@@ -292,7 +293,7 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     const current = steps.find((s) => s.state === "running");
     const failed = steps.filter((s) => s.state === "error");
     return [
-      h("p", { className: "sec-note", textContent: `${finished} / ${steps.length} 手順` }),
+      h("p", { className: "sec-note", textContent: t("{done} / {total} 手順", { done: finished, total: steps.length }) }),
       ...(current ? [h("p", { className: "sec-note", textContent: `${STEP_ICON.running} [${current.group}] ${current.display}` })] : []),
       ...failed.map((s) => h("p", { className: "bad", textContent: `${STEP_ICON.error} [${s.group}] ${s.display}` })),
     ];
@@ -302,27 +303,27 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     const log = h("pre", { className: "setup-log", textContent: install.log.slice(-SHOWN_LOG_LINES).join("\n") });
     queueMicrotask(() => { log.scrollTop = log.scrollHeight; });
     return h("div", { className: "vt-confirm" },
-      h("p", { textContent: `${entryName(install.entryId)} を導入しています…${SCOPE_LABEL(install)}` }),
+      h("p", { textContent: `${t("{name} を導入しています…", { name: entryName(install.entryId) })}${SCOPE_LABEL(install)}` }),
       ...stepLines(install.steps),
       log,
-      button("取り消し", async () => { await post("/api/video-tools/cancel"); await load(); }));
+      button(t("取り消し"), async () => { await post("/api/video-tools/cancel"); await load(); }));
   }
 
   function resultView() {
     if (!install || install.state === "idle" || install.state === "running") return null;
     const kind = catalog?.entries.find((e) => e.id === install.entryId)?.kind;
-    const log = h("details", { className: "sec-more" }, h("summary", { textContent: "ログ" }), h("pre", { className: "setup-log", textContent: install.log.slice(-SHOWN_LOG_LINES).join("\n") }));
-    if (install.state === "error") return h("div", { className: "vt-result" }, h("p", { className: "bad", textContent: `${entryName(install.entryId)} の導入に失敗しました: ${install.error}` }), log);
-    if (install.state === "cancelled") return h("div", { className: "vt-result" }, h("p", { className: "sec-note", textContent: "導入を取り消しました。" }));
-    return h("div", { className: "vt-result" }, h("p", { className: "ok", textContent: `✓ ${entryName(install.entryId)} を導入しました` }), h("p", { className: "sec-note", textContent: AFTER_INSTALL[kind] ?? "" }), log);
+    const log = h("details", { className: "sec-more" }, h("summary", { textContent: t("ログ") }), h("pre", { className: "setup-log", textContent: install.log.slice(-SHOWN_LOG_LINES).join("\n") }));
+    if (install.state === "error") return h("div", { className: "vt-result" }, h("p", { className: "bad", textContent: t("{name} の導入に失敗しました: {error}", { name: entryName(install.entryId), error: install.error }) }), log);
+    if (install.state === "cancelled") return h("div", { className: "vt-result" }, h("p", { className: "sec-note", textContent: t("導入を取り消しました。") }));
+    return h("div", { className: "vt-result" }, h("p", { className: "ok", textContent: `✓ ${t("{name} を導入しました", { name: entryName(install.entryId) })}` }), h("p", { className: "sec-note", textContent: AFTER_INSTALL[kind] ?? "" }), log);
   }
 
   function updateSummary() {
-    if (!catalog?.available) return setSummary(catalog ? "⚠ 読み込めません" : "確認中…", catalog ? "bad" : "neutral");
-    if (install?.state === "running") return setSummary("導入中…", "neutral");
+    if (!catalog?.available) return setSummary(catalog ? t("⚠ 読み込めません") : t("確認中…"), catalog ? "bad" : "neutral");
+    if (install?.state === "running") return setSummary(t("導入中…"), "neutral");
     const installable = catalog.entries.filter((e) => COMMAND_KINDS.has(e.kind));
     const done = installable.filter((e) => e.installed.state === "installed").length;
-    setSummary(`導入済み ${done} / ${installable.length}`, "neutral");
+    setSummary(t("導入済み {done} / {total}", { done, total: installable.length }), "neutral");
   }
 
   function matchesFilter(entry) {
@@ -340,7 +341,7 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     if (!catalog?.available) return;
     const filtered = catalog.entries.filter(matchesFilter);
     if (!filtered.length) {
-      listBox.replaceChildren(h("p", { className: "sec-note", textContent: "該当するツールがありません。" }));
+      listBox.replaceChildren(h("p", { className: "sec-note", textContent: t("該当するツールがありません。") }));
       return;
     }
     listBox.replaceChildren(
@@ -357,12 +358,12 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     if (!force && key === shownKey) return;
     shownKey = key;
     updateSummary();
-    if (!catalog) return box.replaceChildren(h("p", { className: "sec-note", textContent: "確認中…" }));
-    if (!catalog.available) return box.replaceChildren(h("p", { className: "bad", textContent: "ツール一覧(catalog/video-tools.json)を読み込めませんでした。アプリのログを確認してください。" }));
+    if (!catalog) return box.replaceChildren(h("p", { className: "sec-note", textContent: t("確認中…") }));
+    if (!catalog.available) return box.replaceChildren(h("p", { className: "bad", textContent: t("ツール一覧(catalog/video-tools.json)を読み込めませんでした。アプリのログを確認してください。") }));
     if (install?.state === "running") return box.replaceChildren(runningView());
     if (confirming) return box.replaceChildren(confirmView());
     if (bulk) return box.replaceChildren(bulkView());
-    const chooser = h("select", { title: "導入先のプロジェクト" }, ...projects.map((name) => h("option", { value: name, selected: name === pj, textContent: name })));
+    const chooser = h("select", { title: t("導入先のプロジェクト") }, ...projects.map((name) => h("option", { value: name, selected: name === pj, textContent: name })));
     chooser.addEventListener("change", async () => { pj = chooser.value; catalog = await get(`/api/video-tools?pj=${encodeURIComponent(pj)}`); render(true); });
     const installable = catalog.entries.filter((e) => COMMAND_KINDS.has(e.kind));
     const done = installable.filter((e) => e.installed.state === "installed").length;
@@ -371,10 +372,10 @@ export function createVideoToolsPanel(box, { setSummary = () => {} } = {}) {
     renderList();
     box.replaceChildren(
       h("div", { className: "vt-target" },
-        h("span", { className: "sec-note", textContent: "導入先" }),
-        projects.length ? chooser : h("span", { className: "sec-note", textContent: "プロジェクトを作ると導入できます" }),
-        h("span", { className: "sec-sum", textContent: `導入済み ${done} / ${installable.length}` }),
-        ...(done < installable.length && projects.length ? [button("まとめて導入", openBulk, "vt-install", "未導入のツールを選んで、すべてのプロジェクトに入れます")] : []),
+        h("span", { className: "sec-note", textContent: t("導入先") }),
+        projects.length ? chooser : h("span", { className: "sec-note", textContent: t("プロジェクトを作ると導入できます") }),
+        h("span", { className: "sec-sum", textContent: t("導入済み {done} / {total}", { done, total: installable.length }) }),
+        ...(done < installable.length && projects.length ? [button(t("まとめて導入"), openBulk, "vt-install", t("未導入のツールを選んで、すべてのプロジェクトに入れます"))] : []),
       ),
       ...(result ? [result] : []),
       filterBar,

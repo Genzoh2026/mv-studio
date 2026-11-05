@@ -2,6 +2,7 @@
 // (The video tools catalog is the separate library tool, library.js; restarting and stopping the server is power.js.)
 import { toast } from "/toast.js";
 import { createAudioToolsPanel } from "/audio-tools-panel.js";
+import { t } from "/i18n.js";
 
 const REFRESH_MS = 5000;
 const SECTIONS_KEY = "mv-studio:settings-sections";
@@ -45,10 +46,10 @@ function makeSection(id, title, headingId) {
 export const settingsTool = {
   id: "settings",
   icon: "⚙",
-  title: "設定",
+  title: t("設定"),
   open(body) {
     const claudeSection = makeSection("claude", "Claude Code");
-    const audioSection = makeSection("audio", "音声ツール", "audio-tools-heading");
+    const audioSection = makeSection("audio", t("音声ツール"), "audio-tools-heading");
     const claudeBox = claudeSection.box;
     body.append(claudeSection.el, audioSection.el);
 
@@ -56,8 +57,8 @@ export const settingsTool = {
 
     function copyButton(text) {
       return h("button", {
-        type: "button", textContent: "コピー",
-        onclick: async () => { await navigator.clipboard.writeText(text); toast("コピーしました", { key: "copied" }); },
+        type: "button", textContent: t("コピー"),
+        onclick: async () => { await navigator.clipboard.writeText(text); toast(t("コピーしました"), { key: "copied" }); },
       });
     }
 
@@ -67,7 +68,7 @@ export const settingsTool = {
       if (status) status.claude = await res.json();
       renderClaude();
       document.dispatchEvent(new CustomEvent("claude-status", { detail: status?.claude }));
-      toast(status?.claude?.found ? `Claude Code を検出しました(${status.claude.version})` : "まだ見つかりません", {
+      toast(status?.claude?.found ? t("Claude Code を検出しました({version})", { version: status.claude.version }) : t("まだ見つかりません"), {
         key: "claude", kind: status?.claude?.found ? "info" : "warn",
       });
     }
@@ -75,9 +76,9 @@ export const settingsTool = {
     /** Install help is shown only while the CLI is missing; the commands come from the server (official docs). */
     function renderClaude() {
       const claude = status?.claude;
-      claudeSection.setSummary(!claude ? "確認中…" : claude.found ? `✓ ${claude.version.split(" ")[0]}` : "✗ 見つかりません", !claude ? "neutral" : claude.found ? "ok" : "bad");
-      const recheckBtn = h("button", { type: "button", textContent: "再確認", onclick: recheck });
-      if (!claude) return claudeBox.replaceChildren(h("p", { className: "sec-note", textContent: "確認中…" }));
+      claudeSection.setSummary(!claude ? t("確認中…") : claude.found ? `✓ ${claude.version.split(" ")[0]}` : t("✗ 見つかりません"), !claude ? "neutral" : claude.found ? "ok" : "bad");
+      const recheckBtn = h("button", { type: "button", textContent: t("再確認"), onclick: recheck });
+      if (!claude) return claudeBox.replaceChildren(h("p", { className: "sec-note", textContent: t("確認中…") }));
       if (claude.found) {
         return claudeBox.replaceChildren(
           h("p", { className: "sec-note", textContent: `${claude.version} · ${claude.where}` }),
@@ -85,15 +86,15 @@ export const settingsTool = {
         );
       }
       claudeBox.replaceChildren(
-        h("p", { className: "bad", textContent: "Claude Code が見つかりません" }),
-        h("p", { className: "sec-note", textContent: "次のコマンドで導入できます(公式の手順)。" }),
+        h("p", { className: "bad", textContent: t("Claude Code が見つかりません") }),
+        h("p", { className: "sec-note", textContent: t("次のコマンドで導入できます(公式の手順)。") }),
         ...claude.install.commands.map((c) => h("div", { className: "cmd" },
           h("span", { className: "sec-note", textContent: c.label }),
           h("pre", { textContent: c.command }),
           copyButton(c.command),
         )),
-        h("a", { href: claude.install.docs, target: "_blank", rel: "noopener noreferrer", textContent: "公式の導入手順を開く ↗" }),
-        h("p", { className: "sec-note", textContent: "導入したら「再確認」を押します。見つからないままなら、アプリを再起動してください(PATH は起動時に読み込まれます)。初回は claude を起動して、ブラウザでログインします(Pro / Max / Team / Enterprise / Console のいずれかが必要です)。" }),
+        h("a", { href: claude.install.docs, target: "_blank", rel: "noopener noreferrer", textContent: t("公式の導入手順を開く ↗") }),
+        h("p", { className: "sec-note", textContent: t("導入したら「再確認」を押します。見つからないままなら、アプリを再起動してください(PATH は起動時に読み込まれます)。初回は claude を起動して、ブラウザでログインします(Pro / Max / Team / Enterprise / Console のいずれかが必要です)。") }),
         recheckBtn,
       );
     }

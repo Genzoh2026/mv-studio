@@ -1,3 +1,4 @@
+import { t } from "/i18n.js";
 // Transient messages float over the page instead of living in the layout, so showing or hiding one never
 // pushes the content around. A toast with an action stays until it is answered or closed.
 const container = document.getElementById("toasts");
@@ -23,7 +24,7 @@ export function toast(text, { key = text, kind = "info", action = null } = {}) {
     }));
   }
   el.append(Object.assign(document.createElement("button"), {
-    type: "button", className: "close", textContent: "✕", title: "閉じる", onclick: () => dismiss(key),
+    type: "button", className: "close", textContent: "✕", title: t("閉じる"), onclick: () => dismiss(key),
   }));
   container.append(el);
   if (!action) timers.set(key, setTimeout(() => dismiss(key), AUTO_HIDE_MS[kind]));

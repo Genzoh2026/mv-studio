@@ -4,26 +4,27 @@
 import { toast } from "/toast.js";
 import { createReviewPanel } from "/review.js";
 import { attachDropZone, uploadFiles } from "/upload.js";
+import { locale, t } from "/i18n.js";
 
-const VIEWS = [["large", "大"], ["medium", "中"], ["small", "小"], ["list", "リスト"]];
+const VIEWS = [["large", t("大")], ["medium", t("中")], ["small", t("小")], ["list", t("リスト")]];
 const DEFAULT_VIEW = "medium";
 const MAX_FILES_PER_DROP = 30;
 const MAX_BYTES = 30 * 1024 * 1024;
-const GEN_KIND_LABELS = { still: "静止画", cut: "カット", final: "完成" };
-const INPUT_LABELS = { song: "曲", image: "画像", video: "動画" };
+const GEN_KIND_LABELS = { still: t("静止画"), cut: t("カット"), final: t("完成") };
+const INPUT_LABELS = { song: t("曲"), image: t("画像"), video: t("動画") };
 
 const KINDS = {
   image: {
-    noun: "画像", api: "/api/images", serve: "/image", upload: true, accept: "image/png,image/jpeg,image/webp,image/gif",
-    chips: [["all", "すべて"], ["user", "自分の素材"], ["claude", "Claude生成"]],
+    noun: t("画像"), api: "/api/images", serve: "/image", upload: true, accept: "image/png,image/jpeg,image/webp,image/gif",
+    chips: [["all", t("すべて")], ["user", t("自分の素材")], ["claude", t("Claude生成")]],
     chipTest: (chip, item) => chip === "all" || (chip === "claude") === Boolean(item.gen),
-    empty: "画像はまだありません。ここへ画像をドラッグ&ドロップするか、「+ 画像を追加」を押してください。",
+    empty: t("画像はまだありません。ここへ画像をドラッグ&ドロップするか、「+ 画像を追加」を押してください。"),
   },
   video: {
-    noun: "動画", api: "/api/videos", serve: "/video", upload: false,
-    chips: [["all", "すべて"], ["final", "完成"], ["cut", "カット"]],
+    noun: t("動画"), api: "/api/videos", serve: "/video", upload: false,
+    chips: [["all", t("すべて")], ["final", t("完成")], ["cut", t("カット")]],
     chipTest: (chip, item) => chip === "all" || item.gen?.kind === chip,
-    empty: "動画はまだありません。左の Claude に動画の生成を頼むと、ここに並びます(Output/video/ に置いた mp4・webm も表示されます)。",
+    empty: t("動画はまだありません。左の Claude に動画の生成を頼むと、ここに並びます(Output/video/ に置いた mp4・webm も表示されます)。"),
   },
 };
 
@@ -34,7 +35,7 @@ const h = (tag, props = {}, ...children) => {
 };
 
 const formatSize = (bytes) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
-const formatDate = (ms) => new Date(ms).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" });
+const formatDate = (ms) => new Date(ms).toLocaleString(locale, { dateStyle: "short", timeStyle: "short" });
 
 /**
  * @param {{root: HTMLElement, getProject: () => string, kind: "image"|"video",
@@ -61,19 +62,19 @@ export function createMediaLibrary({ root, getProject, kind, openOther, typeToTe
   let reviewPanel = null;   // the pin panel of the opened video
   let openedSnapshot = "";  // the opened file as drawn, so a list change elsewhere does not restart a playing video
 
-  const filterInput = h("input", { placeholder: `ファイル名・番号(#3)で絞り込み`, autocomplete: "off", type: "search" });
-  filterInput.setAttribute("aria-label", `${cfg.noun}を絞り込み`);
+  const filterInput = h("input", { placeholder: t("ファイル名・番号(#3)で絞り込み"), autocomplete: "off", type: "search" });
+  filterInput.setAttribute("aria-label", t("{noun}を絞り込み", { noun: cfg.noun }));
   const chipButtons = cfg.chips.map(([id, label]) => h("button", { type: "button", textContent: label, onclick: () => { chip = id; key = null; render(); } }));
-  const viewButtons = VIEWS.map(([id, label]) => h("button", { type: "button", textContent: label, title: `${label}表示`, onclick: () => setView(id) }));
+  const viewButtons = VIEWS.map(([id, label]) => h("button", { type: "button", textContent: label, title: t("{label}表示", { label }), onclick: () => setView(id) }));
   const toolbar = h("div", { className: "img-toolbar" }, filterInput, h("span", { className: "img-views" }, ...chipButtons), h("span", { className: "img-views" }, ...viewButtons));
   let picker = null;
   if (cfg.upload) {
     picker = h("input", { type: "file", multiple: true, accept: cfg.accept, hidden: true });
-    toolbar.append(h("button", { type: "button", textContent: `+ ${cfg.noun}を追加`, onclick: () => picker.click() }), picker);
+    toolbar.append(h("button", { type: "button", textContent: t("+ {noun}を追加", { noun: cfg.noun }), onclick: () => picker.click() }), picker);
   }
   const bar = h("div", { className: "img-bar" });
   const body = h("div", { className: "img-body" });
-  const dropMask = h("div", { className: "img-drop", hidden: true, textContent: "ここにドロップして追加" });
+  const dropMask = h("div", { className: "img-drop", hidden: true, textContent: t("ここにドロップして追加") });
   const viewer = h("div", { className: "img-viewer", hidden: true });
   root.append(toolbar, bar, body, dropMask, viewer);
 
@@ -95,7 +96,7 @@ export function createMediaLibrary({ root, getProject, kind, openOther, typeToTe
     const target = project;
     if (!target) return;
     await uploadFiles({
-      files, unit: "枚", maxFiles: MAX_FILES_PER_DROP, maxBytes: MAX_BYTES, toastKey: "img",
+      files, unit: t("枚"), maxFiles: MAX_FILES_PER_DROP, maxBytes: MAX_BYTES, toastKey: "img",
       urlFor: (name) => `${cfg.api}/upload?pj=${encodeURIComponent(target)}&name=${encodeURIComponent(name)}`,
       onProgress: (remaining) => { uploading = remaining; renderBar(); },
     });
@@ -114,8 +115,8 @@ export function createMediaLibrary({ root, getProject, kind, openOther, typeToTe
     if (!res.ok) return toast(answer.error, { key: `${kind}-trash`, kind: "error" });
     for (const name of answer.moved) selected.delete(name);
     confirming = false;
-    if (answer.moved.length) toast(`${answer.moved.length} 件をゴミ箱へ移動しました(左端のゴミ箱から戻せます)`, { key: `${kind}-trash` });
-    if (answer.failed.length) toast(`移動できませんでした: ${answer.failed.map((f) => `${f.name}(${f.error})`).join("、")}`, { key: `${kind}-trash-failed`, kind: "error" });
+    if (answer.moved.length) toast(t("{n} 件をゴミ箱へ移動しました(左端のゴミ箱から戻せます)", { n: answer.moved.length }), { key: `${kind}-trash` });
+    if (answer.failed.length) toast(t("移動できませんでした: {list}", { list: answer.failed.map((f) => `${f.name}(${f.error})`).join(t("、")) }), { key: `${kind}-trash-failed`, kind: "error" });
     await refresh(true);
   }
 
@@ -124,19 +125,19 @@ export function createMediaLibrary({ root, getProject, kind, openOther, typeToTe
     chipButtons.forEach((button, i) => button.classList.toggle("on", cfg.chips[i][0] === chip));
     viewButtons.forEach((button, i) => button.classList.toggle("on", VIEWS[i][0] === view));
     const parts = [];
-    if (uploading) parts.push(h("span", { className: "meta", textContent: `追加中… 残り ${uploading} 件` }));
+    if (uploading) parts.push(h("span", { className: "meta", textContent: t("追加中… 残り {n} 件", { n: uploading }) }));
     if (selected.size) {
-      parts.push(h("span", { textContent: `${selected.size} 件を選択中` }));
+      parts.push(h("span", { textContent: t("{n} 件を選択中", { n: selected.size }) }));
       if (confirming) {
         parts.push(
-          h("span", { textContent: "workspace\\_Trash へ移動します(完全には削除されません)。続けますか?" }),
-          h("button", { type: "button", className: "danger", textContent: "ごみ箱へ移動", onclick: () => trash([...selected]) }),
-          h("button", { type: "button", textContent: "やめる", onclick: () => { confirming = false; renderBar(); } }),
+          h("span", { textContent: t("workspace\\_Trash へ移動します(完全には削除されません)。続けますか?") }),
+          h("button", { type: "button", className: "danger", textContent: t("ごみ箱へ移動"), onclick: () => trash([...selected]) }),
+          h("button", { type: "button", textContent: t("やめる"), onclick: () => { confirming = false; renderBar(); } }),
         );
       } else {
         parts.push(
-          h("button", { type: "button", textContent: "ごみ箱へ…", onclick: () => { confirming = true; renderBar(); } }),
-          h("button", { type: "button", textContent: "選択を解除", onclick: () => { selected.clear(); confirming = false; render(); } }),
+          h("button", { type: "button", textContent: t("ごみ箱へ…"), onclick: () => { confirming = true; renderBar(); } }),
+          h("button", { type: "button", textContent: t("選択を解除"), onclick: () => { selected.clear(); confirming = false; render(); } }),
         );
       }
     }
@@ -158,8 +159,8 @@ export function createMediaLibrary({ root, getProject, kind, openOther, typeToTe
   /** A small mark on the card: where the file came from. */
   const originMark = (item) => {
     if (!item.gen) return null;
-    const label = item.gen.error ? "出所エラー" : (GEN_KIND_LABELS[item.gen.kind] ?? "生成");
-    return h("span", { className: `img-origin${item.gen.error ? " bad" : ""}`, textContent: item.gen.error ? "!" : "AI", title: `Claude 生成: ${label}` });
+    const label = item.gen.error ? t("出所エラー") : (GEN_KIND_LABELS[item.gen.kind] ?? t("生成"));
+    return h("span", { className: `img-origin${item.gen.error ? " bad" : ""}`, textContent: item.gen.error ? "!" : "AI", title: t("Claude 生成: {label}", { label }) });
   };
 
   const thumbMedia = (item) => (kind === "video"
@@ -167,11 +168,11 @@ export function createMediaLibrary({ root, getProject, kind, openOther, typeToTe
     : h("img", { src: src(item), alt: item.name, loading: "lazy" }));
 
   function card(item, index) {
-    const check = h("input", { type: "checkbox", className: "pick", checked: selected.has(item.name), title: "選択(Shift で範囲選択)" });
-    check.setAttribute("aria-label", `${item.name} を選択`);
+    const check = h("input", { type: "checkbox", className: "pick", checked: selected.has(item.name), title: t("選択(Shift で範囲選択)") });
+    check.setAttribute("aria-label", t("{name} を選択", { name: item.name }));
     check.addEventListener("click", (event) => { event.stopPropagation(); pick(item, index, event); });
     const thumb = h("div", { className: "thumb" }, thumbMedia(item), check,
-      h("span", { className: "img-id", textContent: `#${item.id}`, title: `Claude には「${cfg.noun}${item.id}」または「#${item.id}」で指示できます` }));
+      h("span", { className: "img-id", textContent: `#${item.id}`, title: t("Claude には「{noun}{id}」または「#{id}」で指示できます", { noun: cfg.noun, id: item.id }) }));
     const mark = originMark(item);
     if (mark) thumb.append(mark);
     const el = h("div", { className: "img-card", tabIndex: 0, role: "button" }, thumb,
@@ -187,7 +188,7 @@ export function createMediaLibrary({ root, getProject, kind, openOther, typeToTe
     renderBar();
     if (!items.length) return body.replaceChildren(h("p", { className: "empty", textContent: cfg.empty }));
     const list = shown();
-    if (!list.length) return body.replaceChildren(h("p", { className: "empty", textContent: "該当するものがありません。" }));
+    if (!list.length) return body.replaceChildren(h("p", { className: "empty", textContent: t("該当するものがありません。") }));
     body.replaceChildren(h("div", { className: `img-grid ${view}` }, ...list.map(card)));
   }
 
@@ -221,7 +222,7 @@ export function createMediaLibrary({ root, getProject, kind, openOther, typeToTe
   function fileLink(type, name, all) {
     const found = all[type]?.find((other) => other.name === name);
     const label = `${INPUT_LABELS[type]}${found ? ` #${found.id}` : ""} · ${name}`;
-    if (!found) return h("span", { className: "gen-missing", textContent: `${label}(見つかりません)` });
+    if (!found) return h("span", { className: "gen-missing", textContent: t("{label}(見つかりません)", { label }) });
     const button = h("button", { type: "button", className: "gen-link", onclick: () => (type === kind ? open(name) : openOther(type, name)) });
     if (type === "image") button.append(h("img", { src: urlOf("image", name, found.mtime), alt: "" }));
     button.append(h("span", { textContent: label }));
@@ -231,27 +232,27 @@ export function createMediaLibrary({ root, getProject, kind, openOther, typeToTe
   /** The provenance panel: what it was made from, how, and what was made from it. `all` = both libraries' lists. */
   function detailPanel(item, all) {
     const gen = item.gen;
-    if (!gen) return [section("出所", dim("出所データがありません(アプリの外で作られた、または Claude が記録していない)。"))];
-    if (gen.error) return [section("出所", h("p", { className: "bad", textContent: `出所データを読めません: ${gen.error}` }))];
-    const sections = [section("出所", h("p", {}, "Claude 生成", gen.kind ? ` · ${GEN_KIND_LABELS[gen.kind]}` : ""))];
-    if (gen.inputs.length) sections.push(section("元データ", ...gen.inputs.map((input) => h("div", {}, input.type === "song" ? h("span", { textContent: `曲 · ${input.name}` }) : fileLink(input.type, input.name, all)))));
+    if (!gen) return [section(t("出所"), dim(t("出所データがありません(アプリの外で作られた、または Claude が記録していない)。")))];
+    if (gen.error) return [section(t("出所"), h("p", { className: "bad", textContent: t("出所データを読めません: {error}", { error: gen.error }) }))];
+    const sections = [section(t("出所"), h("p", {}, t("Claude 生成"), gen.kind ? ` · ${GEN_KIND_LABELS[gen.kind]}` : ""))];
+    if (gen.inputs.length) sections.push(section(t("元データ"), ...gen.inputs.map((input) => h("div", {}, input.type === "song" ? h("span", { textContent: t("曲 · {name}", { name: input.name }) }) : fileLink(input.type, input.name, all)))));
     const m = gen.method;
-    const rows = [["ツール", m.tool], ["モデル", m.model], ["日時", m.createdAt ? formatDate(Date.parse(m.createdAt)) : ""], ...m.params].filter(([, v]) => v);
+    const rows = [[t("ツール"), m.tool], [t("モデル"), m.model], [t("日時"), m.createdAt ? formatDate(Date.parse(m.createdAt)) : ""], ...m.params].filter(([, v]) => v);
     const method = [];
     if (rows.length) method.push(h("dl", { className: "info" }, ...rows.flatMap(([k, v]) => [h("dt", { textContent: k }), h("dd", { textContent: v })])));
     if (m.prompt) {
       method.push(h("pre", { className: "gen-prompt", textContent: m.prompt }),
-        h("button", { type: "button", textContent: "プロンプトをコピー", onclick: async () => { await navigator.clipboard.writeText(m.prompt); toast("コピーしました", { key: "copied" }); } }));
+        h("button", { type: "button", textContent: t("プロンプトをコピー"), onclick: async () => { await navigator.clipboard.writeText(m.prompt); toast(t("コピーしました"), { key: "copied" }); } }));
     }
-    if (method.length) sections.push(section("生成方法", ...method));
-    if (gen.note) sections.push(section("メモ", h("p", { textContent: gen.note })));
+    if (method.length) sections.push(section(t("生成方法"), ...method));
+    if (gen.note) sections.push(section(t("メモ"), h("p", { textContent: gen.note })));
     const lineage = [];
-    if (gen.parent) lineage.push(h("div", {}, h("span", { className: "meta", textContent: "元の版: " }), fileLink(kind, gen.parent.name, all)));
+    if (gen.parent) lineage.push(h("div", {}, h("span", { className: "meta", textContent: t("元の版: ") }), fileLink(kind, gen.parent.name, all)));
     const children = ["image", "video"].flatMap((type) => (all[type] ?? [])
       .filter((other) => other.gen?.inputs?.some((i) => i.type === kind && i.name === item.name) || (type === kind && other.gen?.parent?.name === item.name))
       .map((other) => [type, other.name]));
-    if (children.length) lineage.push(h("div", {}, h("span", { className: "meta", textContent: "この" + cfg.noun + "から作られたもの:" }), ...children.map(([type, name]) => h("div", {}, fileLink(type, name, all)))));
-    if (lineage.length) sections.push(section("派生", ...lineage));
+    if (children.length) lineage.push(h("div", {}, h("span", { className: "meta", textContent: t("この{noun}から作られたもの:", { noun: cfg.noun }) }), ...children.map(([type, name]) => h("div", {}, fileLink(type, name, all)))));
+    if (lineage.length) sections.push(section(t("派生"), ...lineage));
     return sections;
   }
 
@@ -271,7 +272,7 @@ export function createMediaLibrary({ root, getProject, kind, openOther, typeToTe
     let media;
     if (kind === "video") {
       const player = h("video", { src: src(item), controls: true, playsInline: true });
-      player.addEventListener("loadedmetadata", () => { info.textContent = `${player.videoWidth}×${player.videoHeight} · ${player.duration.toFixed(1)}秒 · ${formatSize(item.size)} · ${formatDate(item.mtime)}`; });
+      player.addEventListener("loadedmetadata", () => { info.textContent = `${player.videoWidth}×${player.videoHeight} · ${t("{n}秒", { n: player.duration.toFixed(1) })} · ${formatSize(item.size)} · ${formatDate(item.mtime)}`; });
       reviewPanel = createReviewPanel({ project, name: item.name, video: player, typeToTerminal, isClaudeReady });
       media = h("div", { className: "rv-stage" }, player, reviewPanel.overlay);
     } else {
@@ -286,25 +287,25 @@ export function createMediaLibrary({ root, getProject, kind, openOther, typeToTe
     loadBoth().then((all) => { if (token === detailToken && opened === item.name) aside.replaceChildren(...detailPanel(item, all)); });
     viewer.hidden = false;
     const stepButtons = [
-      h("button", { type: "button", textContent: "‹", title: "前へ(←)", disabled: !many, onclick: () => step(-1) }),
-      h("button", { type: "button", textContent: "›", title: "次へ(→)", disabled: !many, onclick: () => step(1) }),
+      h("button", { type: "button", textContent: "‹", title: t("前へ(←)"), disabled: !many, onclick: () => step(-1) }),
+      h("button", { type: "button", textContent: "›", title: t("次へ(→)"), disabled: !many, onclick: () => step(1) }),
     ];
     const header = h("header", {}, h("span", { className: "img-id inline", textContent: `#${item.id}` }), h("strong", { textContent: item.name }), info,
       h("span", { className: "spacer" }),
       ...(reviewPanel ? stepButtons : []),
-      h("button", { type: "button", textContent: "ごみ箱へ", onclick: async () => { close(); await trash([item.name]); } }),
-      h("button", { type: "button", textContent: "✕", title: "閉じる(Esc)", onclick: close }));
+      h("button", { type: "button", textContent: t("ごみ箱へ"), onclick: async () => { close(); await trash([item.name]); } }),
+      h("button", { type: "button", textContent: "✕", title: t("閉じる(Esc)"), onclick: close }));
     if (reviewPanel) {
       // A video gets the width: the picture with its pins, a narrow pin list at its right (so more comments never shrink the picture), and the provenance folded away below.
       aside.classList.add("folded");
-      viewer.replaceChildren(header, h("div", { className: "img-stage review" }, media, reviewPanel.dock), h("details", { className: "rv-origin" }, h("summary", { textContent: "出所・生成情報" }), aside));
+      viewer.replaceChildren(header, h("div", { className: "img-stage review" }, media, reviewPanel.dock), h("details", { className: "rv-origin" }, h("summary", { textContent: t("出所・生成情報") }), aside));
       return;
     }
     viewer.replaceChildren(header,
       h("div", { className: "img-stage" },
-        h("button", { type: "button", className: "nav", textContent: "‹", title: "前へ(←)", disabled: !many, onclick: () => step(-1) }),
+        h("button", { type: "button", className: "nav", textContent: "‹", title: t("前へ(←)"), disabled: !many, onclick: () => step(-1) }),
         media,
-        h("button", { type: "button", className: "nav", textContent: "›", title: "次へ(→)", disabled: !many, onclick: () => step(1) }),
+        h("button", { type: "button", className: "nav", textContent: "›", title: t("次へ(→)"), disabled: !many, onclick: () => step(1) }),
         aside));
   }
 

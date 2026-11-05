@@ -2,10 +2,11 @@
 // whatever tab or project is open, and announces when one finishes or fails. It takes a line of height only while there
 // is something to show, and never covers the content (it is part of the layout, not an overlay).
 import { toast } from "/toast.js";
+import { t } from "/i18n.js";
 
 const ACTIVE_POLL_MS = 1500;
 const IDLE_POLL_MS = 3500;
-const KIND_LABELS = { separate: "分離", beats: "ビート解析" };
+const KIND_LABELS = { separate: t("分離"), beats: t("ビート解析") };
 const KIND_ICONS = { separate: "🎚", beats: "🥁" };
 
 const h = (tag, props = {}, ...children) => {
@@ -22,7 +23,7 @@ const isActive = (job) => job.state === "running" || job.state === "queued";
 // A finished job stays in the strip a few seconds: some take less than a second and would never be seen.
 const RECENT_DONE_MS = 6000;
 const isRecent = (job) => job.state === "done" && Boolean(job.finishedAt) && Date.now() - job.finishedAt < RECENT_DONE_MS;
-const tookText = (job) => (job.startedAt && job.finishedAt ? `(${((job.finishedAt - job.startedAt) / 1000).toFixed(1)} 秒)` : "");
+const tookText = (job) => (job.startedAt && job.finishedAt ? t("({s} 秒)", { s: ((job.finishedAt - job.startedAt) / 1000).toFixed(1) }) : "");
 
 /** @param {{root: HTMLElement}} options */
 export function createJobBar({ root }) {
@@ -36,13 +37,13 @@ export function createJobBar({ root }) {
       const before = lastState.get(job.id);
       lastState.set(job.id, job.state);
       if (first || before === job.state) continue;
-      const name = `「${titleOf(job.base)}」の${KIND_LABELS[job.kind]}${job.requestedBy === "claude" ? "(Claude の依頼)" : ""}`;
-      if (job.state === "done") toast(`${name}が終わりました${job.then ? "(続けてビート解析します)" : ""}`, { key: `job-${job.id}` });
-      else if (job.state === "error") toast(`${name}に失敗しました: ${job.error}`, { key: `job-${job.id}`, kind: "error" });
+      const name = t("「{title}」の{kind}", { title: titleOf(job.base), kind: KIND_LABELS[job.kind] }) + (job.requestedBy === "claude" ? t("(Claude の依頼)") : "");
+      if (job.state === "done") toast(t("{name}が終わりました", { name }) + (job.then ? t("(続けてビート解析します)") : ""), { key: `job-${job.id}` });
+      else if (job.state === "error") toast(t("{name}に失敗しました: {error}", { name, error: job.error }), { key: `job-${job.id}`, kind: "error" });
     }
     if (!first && lastInstall === "running" && install && install.state !== "running") {
-      if (install.state === "done") toast("音声ツールの導入が終わりました", { key: "audio-setup" });
-      else if (install.state === "error") toast(`音声ツールの導入に失敗しました: ${install.error}`, { key: "audio-setup", kind: "error" });
+      if (install.state === "done") toast(t("音声ツールの導入が終わりました"), { key: "audio-setup" });
+      else if (install.state === "error") toast(t("音声ツールの導入に失敗しました: {error}", { error: install.error }), { key: "audio-setup", kind: "error" });
     }
     lastInstall = install?.state ?? null;
     first = false;
@@ -55,7 +56,7 @@ export function createJobBar({ root }) {
     if (!active.length && !installing && recent) {
       root.hidden = false;
       return root.replaceChildren(h("div", { className: "job-item done" },
-        h("span", { className: "job-text", textContent: `✓ ${KIND_ICONS[recent.kind]} ${KIND_LABELS[recent.kind]}が終わりました 「${titleOf(recent.base)}」 ${tookText(recent)}${recent.then ? " → 続けてビート解析" : ""}` })));
+        h("span", { className: "job-text", textContent: `✓ ${KIND_ICONS[recent.kind]} ${t("{kind}が終わりました 「{title}」", { kind: KIND_LABELS[recent.kind], title: titleOf(recent.base) })} ${tookText(recent)}${recent.then ? t(" → 続けてビート解析") : ""}` })));
     }
     if (!active.length && !installing) {
       root.hidden = true;
@@ -67,8 +68,8 @@ export function createJobBar({ root }) {
       const step = install.steps.findIndex((s) => s.state === "running") + 1;
       items.push(h("div", { className: "job-item" },
         h("progress", { max: 100 }),
-        h("span", { className: "job-text", textContent: `🔧 音声ツールを導入中(${step}/${install.steps.length}: ${install.steps[step - 1]?.label ?? ""})` }),
-        h("button", { type: "button", textContent: "取り消し", onclick: () => post("/api/audio-install/cancel") })));
+        h("span", { className: "job-text", textContent: t("🔧 音声ツールを導入中({step}/{total}: {label})", { step, total: install.steps.length, label: install.steps[step - 1]?.label ?? "" }) }),
+        h("button", { type: "button", textContent: t("取り消し"), onclick: () => post("/api/audio-install/cancel") })));
     }
     // The running job first, then the ones waiting (shown as a count, so the strip stays one line).
     const running = active.find((job) => job.state === "running") ?? active[0];
@@ -76,8 +77,8 @@ export function createJobBar({ root }) {
       const waiting = active.length - 1;
       items.push(h("div", { className: "job-item" },
         h("progress", { max: 100, value: running.state === "running" ? running.progress : 0 }),
-        h("span", { className: "job-text", textContent: `${KIND_ICONS[running.kind]} ${KIND_LABELS[running.kind]}${running.state === "running" ? `中 ${running.progress}%` : ": 順番待ち"} 「${titleOf(running.base)}」${running.then ? "→ ビート解析" : ""}${running.requestedBy === "claude" ? "  [Claude の依頼]" : ""}${waiting ? `  ほか ${waiting} 件待機` : ""}` }),
-        h("button", { type: "button", textContent: "取り消し", onclick: async () => { await cancelJob(running.id); tick(); } })));
+        h("span", { className: "job-text", textContent: `${KIND_ICONS[running.kind]} ${KIND_LABELS[running.kind]}${running.state === "running" ? t("{kind}中 {progress}%", { kind: KIND_LABELS[running.kind], progress: running.progress }) : t("{kind}: 順番待ち", { kind: KIND_LABELS[running.kind] })} 「${titleOf(running.base)}」${running.then ? t("→ ビート解析") : ""}${running.requestedBy === "claude" ? t("  [Claude の依頼]") : ""}${waiting ? t("  ほか {n} 件待機", { n: waiting }) : ""}` }),
+        h("button", { type: "button", textContent: t("取り消し"), onclick: async () => { await cancelJob(running.id); tick(); } })));
     }
     root.replaceChildren(...items);
   }

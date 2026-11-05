@@ -2,6 +2,7 @@
 // Claude. The pins live in <video>.review.json (saved through the app); Claude marks them done when it has made a fixed
 // new version, so what you see here follows the folder. Used by the video viewer of the video library.
 import { toast } from "/toast.js";
+import { t } from "/i18n.js";
 
 const SAVE_DELAY_MS = 600;
 const POLL_MS = 3000;
@@ -52,7 +53,7 @@ export function createReviewPanel({ project, name, video, typeToTerminal, isClau
     const res = await post("", { pins: payload }).catch(() => null);
     if (!res?.ok) {
       unsaved = true;
-      return toast(res ? (await res.json()).error : "ピンを保存できませんでした", { key: "review-save", kind: "error" });
+      return toast(res ? (await res.json()).error : t("ピンを保存できませんでした"), { key: "review-save", kind: "error" });
     }
     const stored = await res.json();
     // Typing went on while this was saved: the stored list is older than the screen, so keep the screen (the next save follows).
@@ -117,7 +118,7 @@ export function createReviewPanel({ project, name, video, typeToTerminal, isClau
     overlay.replaceChildren(...open()
       .filter((pin) => pin.x !== null && (pin.id === selected || Math.abs(pin.t - now) <= NEAR_S))
       .map((pin) => {
-        const mark = h("button", { type: "button", className: `rv-pin${pin.id === selected ? " sel" : ""}`, textContent: String(pin.id), title: pin.text || "(コメントなし)" });
+        const mark = h("button", { type: "button", className: `rv-pin${pin.id === selected ? " sel" : ""}`, textContent: String(pin.id), title: pin.text || t("(コメントなし)") });
         mark.style.left = `${pin.x * 100}%`;
         mark.style.top = `${pin.y * 100}%`;
         mark.addEventListener("click", (event) => { event.stopPropagation(); selected = pin.id; render(true); dock.querySelector(`[data-pin="${pin.id}"] textarea`)?.focus(); });
@@ -128,7 +129,7 @@ export function createReviewPanel({ project, name, video, typeToTerminal, isClau
   // ---- the dock under the video ----
   function pinCard(pin) {
     const sent = pin.sentAt && !unsaved;
-    const area = h("textarea", { value: pin.text, placeholder: "どう直したいか(例: 口元を隠す / 色を明るく / この拍で切る)", rows: 2 });
+    const area = h("textarea", { value: pin.text, placeholder: t("どう直したいか(例: 口元を隠す / 色を明るく / この拍で切る)"), rows: 2 });
     // The list is replaced by the stored one after every save, while this box stays on screen: always edit the pin that is
     // in the list NOW (by number), never the object this box was built with.
     area.addEventListener("input", () => {
@@ -143,12 +144,12 @@ export function createReviewPanel({ project, name, video, typeToTerminal, isClau
     area.addEventListener("blur", save);
     const el = h("div", { className: `rv-item${pin.id === selected ? " sel" : ""}` },
       h("div", { className: "rv-meta" },
-        h("span", {}, h("b", { className: "rv-num", textContent: String(pin.id) }), ` ${clock(pin.t)}${pin.x === null ? " · 全体" : ""}`),
-        h("span", { className: sent ? "rv-sent" : "rv-unsent", textContent: sent ? "送信済み" : "未送信" })),
+        h("span", {}, h("b", { className: "rv-num", textContent: String(pin.id) }), ` ${clock(pin.t)}${pin.x === null ? t(" · 全体") : ""}`),
+        h("span", { className: sent ? "rv-sent" : "rv-unsent", textContent: sent ? t("送信済み") : t("未送信") })),
       area,
       h("div", { className: "rv-acts" },
-        h("button", { type: "button", textContent: "ここへ移動", onclick: () => { video.pause(); video.currentTime = pin.t; selected = pin.id; render(true); } }),
-        h("button", { type: "button", textContent: "削除", onclick: async () => { pins = pins.filter((other) => other.id !== pin.id); unsaved = true; render(true); await save(); } })));
+        h("button", { type: "button", textContent: t("ここへ移動"), onclick: () => { video.pause(); video.currentTime = pin.t; selected = pin.id; render(true); } }),
+        h("button", { type: "button", textContent: t("削除"), onclick: async () => { pins = pins.filter((other) => other.id !== pin.id); unsaved = true; render(true); await save(); } })));
     el.dataset.pin = pin.id;
     return el;
   }
@@ -160,8 +161,8 @@ export function createReviewPanel({ project, name, video, typeToTerminal, isClau
     if (!sendButton) return;
     const count = sendable().length;
     sendButton.disabled = !count || !isClaudeReady();
-    sendButton.textContent = count ? `Claudeに修正を依頼(${count}件)` : "Claudeに修正を依頼";
-    sendButton.title = isClaudeReady() ? "ピンの内容を Claude の入力欄に入れます(Enter で送信)" : "Claude が見つかりません(設定を確認してください)";
+    sendButton.textContent = count ? t("Claudeに修正を依頼({n}件)", { n: count }) : t("Claudeに修正を依頼");
+    sendButton.title = isClaudeReady() ? t("ピンの内容を Claude の入力欄に入れます(Enter で送信)") : t("Claude が見つかりません(設定を確認してください)");
     copyButton.disabled = !count;
   }
 
@@ -180,10 +181,10 @@ export function createReviewPanel({ project, name, video, typeToTerminal, isClau
     try {
       await typeToTerminal(request.line);
     } catch (err) {
-      return toast(`Claude の入力欄に入れられませんでした: ${err.message}(Markdown のコピーを使えます)`, { key: "review-request", kind: "error" });
+      return toast(t("Claude の入力欄に入れられませんでした: {error}(Markdown のコピーを使えます)", { error: err.message }), { key: "review-request", kind: "error" });
     }
     await post("/sent", { ids: request.ids });
-    toast(`${request.ids.length} 件のピンを Claude の入力欄に入れました。Enter で送信してください`, { key: "review-request" });
+    toast(t("{n} 件のピンを Claude の入力欄に入れました。Enter で送信してください", { n: request.ids.length }), { key: "review-request" });
     await load();
   }
 
@@ -191,10 +192,10 @@ export function createReviewPanel({ project, name, video, typeToTerminal, isClau
     const request = await prepare();
     if (!request) return;
     await navigator.clipboard.writeText(request.markdown);
-    toast("Markdown をコピーしました", { key: "review-copy" });
+    toast(t("Markdown をコピーしました"), { key: "review-copy" });
   }
 
-  const timeline = h("div", { className: "rv-tl", title: "クリックでその時刻へ" });
+  const timeline = h("div", { className: "rv-tl", title: t("クリックでその時刻へ") });
   timeline.addEventListener("click", (event) => {
     if (!video.duration) return;
     const box = timeline.getBoundingClientRect();
@@ -221,19 +222,19 @@ export function createReviewPanel({ project, name, video, typeToTerminal, isClau
     const done = pins.filter((pin) => pin.status === "done");
     const typing = dock.contains(document.activeElement) && document.activeElement.tagName === "TEXTAREA";
     if (typing && !force) return updateActions(); // never rebuild the box someone is typing in
-    const toggle = h("button", { type: "button", className: pinMode ? "on" : "", textContent: pinMode ? "📍 ピンを打つ(動画をクリック)" : "📍 ピンを打つ", title: "オンにして、動画の気になる場所をクリックします", onclick: () => { pinMode = !pinMode; render(true); } });
+    const toggle = h("button", { type: "button", className: pinMode ? "on" : "", textContent: pinMode ? t("📍 ピンを打つ(動画をクリック)") : t("📍 ピンを打つ"), title: t("オンにして、動画の気になる場所をクリックします"), onclick: () => { pinMode = !pinMode; render(true); } });
     sendButton = h("button", { type: "button", className: "danger", onclick: sendToClaude });
-    copyButton = h("button", { type: "button", textContent: "Markdownをコピー", onclick: copyMarkdown });
+    copyButton = h("button", { type: "button", textContent: t("Markdownをコピー"), onclick: copyMarkdown });
     const list = open();
     dock.replaceChildren(
-      h("div", { className: "rv-bar" }, toggle, h("button", { type: "button", textContent: "＋ 全体コメント", title: "場所を指さない指示(今の時刻に付きます)", onclick: addWholePicturePin }), h("span", { className: "spacer" }), copyButton, sendButton),
+      h("div", { className: "rv-bar" }, toggle, h("button", { type: "button", textContent: t("＋ 全体コメント"), title: t("場所を指さない指示(今の時刻に付きます)"), onclick: addWholePicturePin }), h("span", { className: "spacer" }), copyButton, sendButton),
       timeline,
-      ...(loadError ? [h("p", { className: "bad", textContent: `ピンを読めません: ${loadError}` })] : []),
-      ...(list.length ? list.map(pinCard) : [h("p", { className: "meta", textContent: "ピンはまだありません。「ピンを打つ」をオンにして、直したい場所をクリックしてください。" })]),
-      ...(done.length ? [h("details", { className: "rv-done" }, h("summary", { textContent: `修正済みのピン(${done.length})` }),
+      ...(loadError ? [h("p", { className: "bad", textContent: t("ピンを読めません: {error}", { error: loadError }) })] : []),
+      ...(list.length ? list.map(pinCard) : [h("p", { className: "meta", textContent: t("ピンはまだありません。「ピンを打つ」をオンにして、直したい場所をクリックしてください。") })]),
+      ...(done.length ? [h("details", { className: "rv-done" }, h("summary", { textContent: t("修正済みのピン({n})", { n: done.length }) }),
         ...done.map((pin) => h("div", { className: "rv-donepin" },
-          h("span", { textContent: `${pin.id} · ${clock(pin.t)} · ${pin.text || "(コメントなし)"} → ${pin.fixedIn ?? ""}` }),
-          h("button", { type: "button", textContent: "削除", onclick: async () => { await post("/delete", { ids: [pin.id] }); await load(); } }))))] : []),
+          h("span", { textContent: `${pin.id} · ${clock(pin.t)} · ${pin.text || t("(コメントなし)")} → ${pin.fixedIn ?? ""}` }),
+          h("button", { type: "button", textContent: t("削除"), onclick: async () => { await post("/delete", { ids: [pin.id] }); await load(); } }))))] : []),
     );
     drawTimeline();
     updateActions();

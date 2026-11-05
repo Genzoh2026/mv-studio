@@ -1,6 +1,7 @@
 // Adding files to a library: a drop zone over a tab, and one-by-one upload with a summary toast.
 // Used by the image library and the song library.
 import { toast } from "/toast.js";
+import { t } from "/i18n.js";
 
 const SHOWN_ERRORS = 3;
 
@@ -39,7 +40,7 @@ export async function uploadFiles({ files, urlFor, unit, maxFiles, maxBytes, toa
   const list = [...files];
   if (!list.length) return 0;
   if (list.length > maxFiles) {
-    toast(`一度に追加できるのは ${maxFiles} ${unit}までです(${list.length} ${unit}選ばれました)`, { key: `${toastKey}-limit`, kind: "warn" });
+    toast(t("一度に追加できるのは {max} {unit}までです({n} {unit}選ばれました)", { max: maxFiles, n: list.length, unit }), { key: `${toastKey}-limit`, kind: "warn" });
     list.length = maxFiles;
   }
   const failures = [];
@@ -48,7 +49,7 @@ export async function uploadFiles({ files, urlFor, unit, maxFiles, maxBytes, toa
   onProgress(remaining);
   for (const file of list) {
     if (file.size > maxBytes) {
-      failures.push(`${file.name}: 大きすぎます(上限 ${maxBytes / 1024 / 1024} MB)`);
+      failures.push(t("{name}: 大きすぎます(上限 {mb} MB)", { name: file.name, mb: maxBytes / 1024 / 1024 }));
     } else {
       try {
         const res = await fetch(urlFor(file.name), { method: "POST", body: file });
@@ -60,10 +61,10 @@ export async function uploadFiles({ files, urlFor, unit, maxFiles, maxBytes, toa
     }
     onProgress(--remaining);
   }
-  if (added) toast(`${added} ${unit}を追加しました`, { key: `${toastKey}-added` });
+  if (added) toast(t("{n} {unit}を追加しました", { n: added, unit }), { key: `${toastKey}-added` });
   if (failures.length) {
-    const more = failures.length > SHOWN_ERRORS ? ` ほか ${failures.length - SHOWN_ERRORS} 件` : "";
-    toast(`追加できませんでした: ${failures.slice(0, SHOWN_ERRORS).join(" / ")}${more}`, { key: `${toastKey}-failed`, kind: "error" });
+    const more = failures.length > SHOWN_ERRORS ? t(" ほか {n} 件", { n: failures.length - SHOWN_ERRORS }) : "";
+    toast(t("追加できませんでした: {list}", { list: failures.slice(0, SHOWN_ERRORS).join(" / ") }) + more, { key: `${toastKey}-failed`, kind: "error" });
   }
   return added;
 }
